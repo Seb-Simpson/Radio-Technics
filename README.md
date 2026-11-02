@@ -2,15 +2,15 @@
 
 An interactive studio explorer and troubleshooting assistant for radio presenters.
 
-> **Status: Phase RT-002 prototype.** Not connected to any studio equipment. The troubleshooter follows scripted conversations — it is not a live AI. No information has been verified by the station engineer yet.
+> **Status: Phase RT-003 prototype.** Not connected to any studio equipment. The troubleshooter follows scripted conversations — it is not a live AI. No information has been verified by the station engineer yet.
 
 ## Current functionality
 - **Dashboard** — quick actions, common problems, equipment shortcuts, honest setup progress.
 - **Studio Explorer** — the station's ten real photographs (thumbnail tabs), each zoomable and pannable by mouse, touch, pinch or keyboard, with clickable equipment hotspots. On phones and tablets, selected equipment opens in a compact bottom sheet. Hotspot identifications are marked unverified until the engineer confirms them. A clearly labelled illustrative drawing is used only if no photographs are configured.
 - **Troubleshooter** — scripted, deterministic conversations. Typed replies are understood structurally (yes / no / not sure, hedged answers, observations such as silence, requests for help, questions about restarting equipment), and contradictions get a clarifying question instead of a guess. Every question offers *I'm not sure*, *Show me where* and *I need technical support*. Possible silence on air is escalated. Ends with a copyable summary that keeps the presenter's own words.
 - **Sessions** — a conversation survives a page refresh within the same browser tab, expires after two hours idle, and can be cleared with **End session**.
-- **Knowledge Centre** — searchable guides and help topics, each showing its verification status.
-- **Administration** — read-only content records and a live content-integrity check.
+- **Knowledge Centre** — describe a problem in your own words ("it's stuck on the same song", "the cans are silent") and a local keyword search with a presenter vocabulary suggests what it might mean, the matching articles, a troubleshooting topic and where the equipment is in the studio. It asks which equipment you mean when unsure, uses your Studio Explorer selection for vague questions, says plainly when nothing matches, and flags possible silence on air. It is **not** an AI. Articles show their authority level (engineer approved / manufacturer documentation / station reported / draft), sources, unresolved questions, related equipment and articles, a glossary and version history.
+- **Administration** — read-only content records, a live content-integrity check and an engineer review queue (open questions, unread sources, unconfirmed photo identifications). See `docs/ENGINEER_REVIEW.md`.
 - **Hotspot editor (developers only)** — `/dev/hotspots`, for placing hotspots on photographs. Not available in production builds.
 - **Installable** — web app manifest and icons, so it can be added to a phone's home screen. It does **not** work offline yet.
 
@@ -70,8 +70,9 @@ tests/
 
 New hotspots are recorded with `identity: "draft"`. Only change that to `verified` with a `review` record once the engineer has confirmed the item.
 
-## Limitations (RT-002)
+## Limitations (RT-003)
 - Troubleshooter uses deterministic understanding and scripted flows, not AI.
+- Official Myriad 6 documentation is listed but not yet read (the build environment could not reach broadcastradio.com), so Myriad articles are drafts.
 - No engineer-verified information or procedures yet; technical-support contact details have not been provided.
 - Hotspot positions were placed from the photographs by the development team; which equipment each one shows is unconfirmed.
 - No authentication or editing. Sessions are kept only in the current browser tab.

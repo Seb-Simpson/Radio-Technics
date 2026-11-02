@@ -5,10 +5,14 @@ Phases are indicative. Each phase should finish with passing automated checks an
 ## RT-001 — Foundation ✅
 Next.js app shell, Studio Explorer, equipment panel, scripted troubleshooter, validated workspace commands, Knowledge Centre, read-only Administration, documentation and tests.
 
-## RT-002 — Stabilisation, studio photos and mobile ✅ (this phase)
+## RT-002 — Stabilisation, studio photos and mobile ✅
 RT-QA-001 fixes (reply understanding, no accidental resets, preserved observations, support requests, silence escalation, viewer resize and keyboard, accessibility, validation), real photographs with hotspots, photo import pipeline, developer hotspot editor, session persistence, phone/tablet layouts, install foundation.
 
-## RT-003 — Engineer review and verified knowledge
+## RT-003 — Knowledge base & intelligent search foundation ✅ (this phase)
+Authority levels incl. manufacturer documentation, structured articles with sources, symptoms, diagnostic and unresolved questions, glossary, version history; local presenter-vocabulary search with intents, ambiguity and selection context; engineer review queue; RT-004 AI contract and deterministic guards.
+
+## RT-003c — Engineer review and verified knowledge
+- Read the official Myriad 6 pages (allow broadcastradio.com hosts) and add original manufacturer-documented summaries.
 - Walk through the photos and `EQUIPMENT.md` with the station engineer; confirm hotspot identities and answer the open questions.
 - Record confirmations as `review` records; add verified procedures only once approved.
 - Add the station's technical-support contact details (and confirm the number seen on the rack sticker).

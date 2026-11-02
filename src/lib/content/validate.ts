@@ -4,7 +4,7 @@ import { hotspots } from "@/data/hotspots";
 import { demoLayoutView, studioPhotos } from "@/data/studio-views";
 import { flowNodes, troubleshootingTopics } from "@/data/troubleshooting-flows";
 import type { FlowNode, TroubleshootingTopic } from "@/lib/troubleshooter/types";
-import type { Signal } from "@/lib/troubleshooter/understand";
+import type { AudioClaim } from "@/lib/troubleshooter/understand";
 import type { EquipmentRecord, Fact, Hotspot, KnowledgeArticle, ReviewRecord, StudioView, VerificationStatus } from "@/types";
 import { validateRegion } from "./geometry";
 
@@ -33,7 +33,7 @@ export const defaultContent: ContentBundle = {
 
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STATUSES: readonly VerificationStatus[] = ["verified", "station-reported", "draft"];
-const SIGNALS: readonly Signal[] = ["silence", "no-sound", "not-working", "on-air-unknown"];
+const AUDIO_CLAIMS: readonly AudioClaim[] = ["present", "absent"];
 const PLACEHOLDER_NAMES = /^(tbc|tbd|unknown|n\/a|na|none|test|todo|engineer|\?+)$/i;
 const PHOTO_SRC = /^\/studio\/photos\/[a-z0-9-]+\.(jpe?g|png|webp)$/;
 const EARLIEST_REVIEW = "2020-01-01";
@@ -185,8 +185,8 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
       if (option.setEquipmentId && !equipmentIds.has(option.setEquipmentId)) {
         add("flows", [`${node.id} option "${option.id}" sets missing equipment "${option.setEquipmentId}"`]);
       }
-      for (const signal of option.signals ?? []) {
-        if (!SIGNALS.includes(signal)) add("flows", [`${node.id} option "${option.id}" has unknown signal "${signal}"`]);
+      if (option.audio !== undefined && !AUDIO_CLAIMS.includes(option.audio)) {
+        add("flows", [`${node.id} option "${option.id}" has unknown audio claim "${String(option.audio)}"`]);
       }
     }
     if (node.kind === "question") {
@@ -195,6 +195,10 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
       if (node.options.length === 0) add("flows", [`${node.id} is a question with no answers`]);
       const answers = node.options.map((o) => o.answer).filter(Boolean);
       if (new Set(answers).size !== answers.length) add("flows", [`${node.id} has two options with the same yes/no meaning`]);
+      // Two yes/no options asserting the same thing about sound would make typed replies ambiguous.
+      const yes = node.options.find((o) => o.answer === "yes");
+      const no = node.options.find((o) => o.answer === "no");
+      if (yes?.audio && no?.audio && yes.audio === no.audio) add("flows", [`${node.id} yes and no options assert the same about sound`]);
     }
     if (node.showEquipmentId && !equipmentIds.has(node.showEquipmentId)) {
       add("flows", [`${node.id} shows missing equipment "${node.showEquipmentId}"`]);

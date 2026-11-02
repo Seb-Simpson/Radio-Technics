@@ -68,12 +68,13 @@ describe("A1 — understanding negation, uncertainty and observations", () => {
     expect(s.messages.some((m) => /also that there's no sound/.test(m.text))).toBe(true);
   });
 
-  it("contradictions elsewhere lead to the on-air check", () => {
+  it("answers are judged against the exact question: meters moving with no sound is consistent, and both facts are kept", () => {
     let s = type(createConversation(), "My microphone isn't working");
     s = press(s, "Presenter microphone");
     s = press(s, "Other people can't hear it");
     s = type(s, "Yes, but there's no sound at all");
-    expect(nodeId(s)).toBe("hear-on-air");
+    expect(s.answers.at(-1)).toMatchObject({ answer: "Yes, they move", source: "typed", typedText: "Yes, but there's no sound at all" });
+    expect(buildSupportSummary(s)).toContain("\u201cYes, but there's no sound at all\u201d");
   });
 
   it("'I don't know whether we're on air' leads to the on-air check, then urgent when still unsure", () => {
@@ -228,7 +229,7 @@ describe("A5 — silence on air", () => {
   it("urgency is kept in the summary even after moving on", () => {
     let s = type(createConversation(), "dead air");
     s = type(s, "the green button isn't working either");
-    expect(buildSupportSummary(s)).toMatch(/^URGENT: possible silence on air reported$/m);
+    expect(buildSupportSummary(s)).toMatch(/^URGENT: silence on air reported$/m);
   });
 
   it("'it's not silent' does not escalate", () => {

@@ -1,5 +1,5 @@
 import type { WorkspaceCommand } from "@/lib/workspace/commands";
-import type { Signal } from "./understand";
+import type { AudioClaim } from "./understand";
 
 /* ------------------------------------------------------------------ */
 /* Static flow content                                                 */
@@ -15,8 +15,11 @@ export interface FlowOption {
    * are only mapped to an option whose meaning agrees with the user's stance.
    */
   answer?: "yes" | "no";
-  /** Observations this option represents (e.g. silence), used to understand typed replies. */
-  signals?: Signal[];
+  /**
+   * Whether choosing this option asserts that sound/playback is present or
+   * absent. A typed reply describing the opposite can never select it.
+   */
+  audio?: AudioClaim;
   /** Specific lower-case phrases that identify this option when typed (negated mentions are ignored). */
   match?: string[];
   /** Switch the conversation's equipment context when chosen. */
@@ -103,8 +106,10 @@ export interface ConversationState {
   answers: AnsweredQuestion[];
   /** Everything the user typed, verbatim, separate from diagnostic answers. */
   observations: Observation[];
-  /** Set once possible silence on air has been reported. Never cleared automatically. */
+  /** Set once silence on air has been reported or confirmed. Never cleared automatically. */
   urgent: boolean;
+  /** Set when the user described possible silence that hasn't been confirmed. Never cleared automatically. */
+  possibleSilence: boolean;
   /** Monotonic counter for message IDs (keeps the engine pure and deterministic). */
   seq: number;
 }

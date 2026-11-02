@@ -146,6 +146,25 @@ export function Troubleshooter() {
 
         {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
 
+        {/* Urgency stays visible whatever step the conversation is on. */}
+        {conversation.urgent ? (
+          <div role="status" data-testid="urgent-banner" className="flex gap-2.5 border-b border-alert-400/40 bg-alert-900/50 px-4 py-2.5 text-[13px] sm:px-5">
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-alert-300" />
+            <p className="text-ink-50">
+              <span className="font-semibold text-alert-300">Urgent: silence on air reported.</span> Contact technical support now.
+              Their contact details haven&apos;t been configured in Radio Technics yet.
+            </p>
+          </div>
+        ) : conversation.possibleSilence ? (
+          <div role="status" data-testid="possible-silence-banner" className="flex gap-2.5 border-b border-caution-400/30 bg-caution-900/40 px-4 py-2.5 text-[13px] sm:px-5">
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-caution-400" />
+            <p className="text-ink-100">
+              <span className="font-semibold text-caution-300">Possible silence reported.</span> If the station is silent on air, say so
+              — it will be treated as urgent.
+            </p>
+          </div>
+        ) : null}
+
         {restored && !confirmingClear && (
           <div role="status" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
             <p className="text-ink-200">

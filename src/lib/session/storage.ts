@@ -13,7 +13,7 @@ import { isKnownEquipmentId } from "@/lib/content/equipment";
  * version, or referring to unknown content is discarded rather than used.
  */
 export const SESSION_KEY = "radio-technics.session";
-export const SESSION_VERSION = 2;
+export const SESSION_VERSION = 3;
 export const SESSION_MAX_IDLE_MS = 2 * 60 * 60 * 1000;
 
 const MAX_MESSAGES = 400;
@@ -121,10 +121,19 @@ export function parseConversation(raw: unknown): ConversationState | null {
   const observations = parseList(raw.observations, parseObservation, MAX_MESSAGES);
   if (!step || !messages || messages.length === 0 || !answers || !observations) return null;
   if (raw.equipmentId !== null && !isKnownEquipmentId(raw.equipmentId)) return null;
-  if (typeof raw.urgent !== "boolean") return null;
+  if (typeof raw.urgent !== "boolean" || typeof raw.possibleSilence !== "boolean") return null;
   if (typeof raw.seq !== "number" || !Number.isInteger(raw.seq) || raw.seq < messages.length) return null;
   if (new Set(messages.map((m) => m.id)).size !== messages.length) return null;
-  return { step, equipmentId: raw.equipmentId as string | null, messages, answers, observations, urgent: raw.urgent, seq: raw.seq };
+  return {
+    step,
+    equipmentId: raw.equipmentId as string | null,
+    messages,
+    answers,
+    observations,
+    urgent: raw.urgent,
+    possibleSilence: raw.possibleSilence,
+    seq: raw.seq,
+  };
 }
 
 /* ------------------------------------------------------------------ */

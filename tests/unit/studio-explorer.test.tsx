@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { EquipmentPanel } from "@/components/studio/EquipmentPanel";
-import { PhotoViewer, clampTransform, fitSize, focusTransform, zoomAround } from "@/components/studio/PhotoViewer";
+import { PhotoViewer, adaptTransformToResize, clampTransform, fitSize, focusTransform, keepRegionVisible, regionCentreOnScreen, zoomAround } from "@/components/studio/PhotoViewer";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import type { StudioView } from "@/types";
 import { navigation } from "../setup";
@@ -157,5 +157,37 @@ describe("viewer geometry", () => {
     const t = focusTransform({ x: 0.5, y: 0.5, width: 0.1, height: 0.1 }, { width: 1000, height: 500 });
     expect(t.scale).toBe(2.5);
     expect(t.x).toBeCloseTo(-0.05 * 1000 * 2.5);
+  });
+
+  it("adapts zoom and pan when the stage shrinks (RT-QA-001 B1)", () => {
+    // Zoomed 3× and panned to the far right on a 1200×675 desktop stage…
+    const desktop = { width: 1200, height: 675 };
+    const t = clampTransform({ scale: 3, x: -1200, y: 300 }, desktop, desktop);
+    // …then the window becomes a 360×203 phone stage.
+    const phone = { width: 360, height: 202.5 };
+    const next = adaptTransformToResize(t, desktop, phone, phone);
+    expect(next.scale).toBe(3);
+    // Still showing the same part of the image, and within the new bounds.
+    expect(next.x / phone.width).toBeCloseTo(t.x / desktop.width);
+    expect(Math.abs(next.x)).toBeLessThanOrEqual((phone.width * 3 - phone.width) / 2);
+    expect(Math.abs(next.y)).toBeLessThanOrEqual((phone.height * 3 - phone.height) / 2);
+  });
+
+  it("recovers from invalid or zero-sized stages", () => {
+    const t = { scale: 2, x: 500, y: 500 };
+    expect(adaptTransformToResize(t, { width: 0, height: 0 }, { width: 100, height: 50 }, { width: 100, height: 50 })).toEqual({ scale: 2, x: 50, y: 25 });
+    expect(adaptTransformToResize({ scale: 2, x: Number.NaN, y: 0 }, { width: 100, height: 50 }, { width: 50, height: 25 }, { width: 50, height: 25 })).toEqual({ scale: 1, x: 0, y: 0 });
+  });
+
+  it("keeps the selected equipment on screen after a resize", () => {
+    const stage = { width: 400, height: 225 };
+    const region = { x: 0.9, y: 0.4, width: 0.05, height: 0.1 };
+    const offscreen = { scale: 3, x: 400, y: 0 };
+    const fixed = keepRegionVisible(region, offscreen, stage, stage);
+    const centre = regionCentreOnScreen(region, fixed, stage);
+    expect(Math.abs(centre.x)).toBeLessThanOrEqual(stage.width / 2);
+    expect(fixed.scale).toBe(3);
+    // Already visible → unchanged.
+    expect(keepRegionVisible(region, fixed, stage, stage)).toBe(fixed);
   });
 });

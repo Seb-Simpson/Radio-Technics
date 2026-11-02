@@ -343,7 +343,10 @@ export function PhotoViewer({
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
         className={cn(
-          "absolute inset-0 flex touch-none items-center justify-center select-none focus-visible:outline-offset-[-2px]",
+          "absolute inset-0 flex items-center justify-center select-none focus-visible:outline-offset-[-2px]",
+          // Not zoomed: vertical swipes scroll the page (pinch still reaches us).
+          // Zoomed: one-finger drags pan the photo instead of the page.
+          shown.scale > 1 ? "touch-none" : "touch-pan-y",
           transform.scale > 1 ? (interacting ? "cursor-grabbing" : "cursor-grab") : "cursor-default",
         )}
       >

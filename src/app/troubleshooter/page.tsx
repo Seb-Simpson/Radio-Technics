@@ -11,7 +11,13 @@ export default function TroubleshooterPage() {
       <PageHeader
         eyebrow="Troubleshooter"
         title="What's the problem?"
-        description="Describe it in your own words. I'll ask one question at a time. This prototype follows scripted conversations — it isn't a live AI and can't see or control studio equipment."
+        description={
+          // Collapsed visually on phones to give the conversation room; the chat header keeps the prototype label.
+          <span className="max-sm:sr-only">
+            Describe it in your own words. I&apos;ll ask one question at a time. This prototype follows scripted conversations — it
+            isn&apos;t a live AI and can&apos;t see or control studio equipment.
+          </span>
+        }
       />
       <Troubleshooter />
     </PageContainer>

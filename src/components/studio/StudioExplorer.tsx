@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, ImagePlus } from "lucide-react";
+import { ArrowLeft, ImagePlus, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import { hotspots as defaultHotspots } from "@/data/hotspots";
 import { EXPECTED_PHOTO_COUNT } from "@/data/studio-views";
 import { Notice } from "@/components/ui/Notice";
@@ -11,10 +11,13 @@ import { buttonStyles } from "@/components/ui/button-styles";
 import { getCategories, getEquipmentByCategory } from "@/lib/content/equipment";
 import { getViews } from "@/lib/content/views";
 import { cn } from "@/lib/cn";
+import { describeStep } from "@/lib/troubleshooter/engine";
 import { useTroubleshooter } from "@/lib/troubleshooter/TroubleshooterProvider";
+import { useMediaQuery, WIDE_LAYOUT_QUERY } from "@/lib/use-media-query";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
 import type { Hotspot, StudioView } from "@/types";
 import { EquipmentPanel } from "./EquipmentPanel";
+import { EquipmentSheet } from "./EquipmentSheet";
 import { PhotoViewer } from "./PhotoViewer";
 
 export interface StudioExplorerProps {
@@ -29,6 +32,19 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
   const { send, active: conversationActive, conversation } = useTroubleshooter();
   const router = useRouter();
   const embedded = variant === "embedded";
+  const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
+  // Phones and tablets show the selected equipment in a bottom sheet.
+  const useSheet = !embedded && !wide;
+  const viewerRef = useRef<HTMLDivElement>(null);
+
+  // Phones/tablets: after "Show me where", bring the photo to the top of the screen so the
+  // highlighted (and zoomed-to) equipment sits above the bottom sheet.
+  const focusToken = state.focusRequest?.token;
+  useEffect(() => {
+    if (!useSheet || focusToken === undefined || !viewerRef.current) return;
+    const top = viewerRef.current.getBoundingClientRect().top + window.scrollY - 64;
+    window.scrollTo?.({ top: Math.max(0, top), behavior: "auto" });
+  }, [useSheet, focusToken]);
 
   const activeView = views.find((view) => view.id === state.activeViewId) ?? views[0];
   const viewHotspots = activeView ? hotspots.filter((h) => h.viewId === activeView.id) : [];
@@ -67,14 +83,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
     <div className={cn("flex flex-col gap-4", embedded && "h-full")}>
       {!hasRealPhotos && !embedded && <MissingPhotosNotice />}
 
-      {!embedded && conversationActive && (
-        <div>
-          <Link href="/troubleshooter" className={buttonStyles({ size: "sm" })}>
-            <ArrowLeft aria-hidden className="size-4" />
-            Back to troubleshooter
-          </Link>
-        </div>
-      )}
+      {!embedded && conversationActive && <ConversationLink prompt={describeStep(conversation).prompt} />}
 
       <div className={cn("grid gap-4", embedded ? "min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_380px]")}>
         <div className="flex min-w-0 flex-col gap-3">
@@ -88,7 +97,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
           )}
 
           {activeView ? (
-            <div role={views.length > 1 ? "tabpanel" : undefined} id={`${variant}-view-panel`} aria-labelledby={views.length > 1 ? `${variant}-tab-${activeView.id}` : undefined}>
+            <div ref={viewerRef} role={views.length > 1 ? "tabpanel" : undefined} id={`${variant}-view-panel`} aria-labelledby={views.length > 1 ? `${variant}-tab-${activeView.id}` : undefined}>
             <PhotoViewer
               view={activeView}
               hotspots={viewHotspots}
@@ -112,16 +121,52 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
           )}
         </div>
 
-        <aside
-          aria-label="Selected equipment"
-          className={cn(
-            "overflow-y-auto rounded-xl border border-ink-750 bg-ink-900",
-            embedded ? "min-h-0" : "xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:self-start",
-          )}
-        >
-          {panel}
-        </aside>
+        {!useSheet && (
+          <aside
+            aria-label="Selected equipment"
+            className={cn(
+              "overflow-y-auto rounded-xl border border-ink-750 bg-ink-900",
+              embedded ? "min-h-0" : "xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:self-start",
+            )}
+          >
+            {panel}
+          </aside>
+        )}
       </div>
+
+      {useSheet && state.selectedEquipmentId && (
+        <>
+          {/* Room to scroll the page above the sheet. */}
+          <div aria-hidden className="h-56" />
+          <EquipmentSheet
+            key={state.selectedEquipmentId}
+            equipmentId={state.selectedEquipmentId}
+            onClose={() => run([{ type: "clear_selection" }])}
+            onTroubleshoot={troubleshoot}
+            conversationActive={conversationActive}
+            details={panel}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Shown on the Studio Explorer while a conversation is in progress, so it's always one tap away. */
+function ConversationLink({ prompt }: { prompt: string }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-signal-500/30 bg-signal-900/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 gap-2.5">
+        <MessageSquare aria-hidden className="mt-0.5 size-4 shrink-0 text-signal-400" />
+        <p className="line-clamp-2 text-sm text-ink-100 sm:line-clamp-none">
+          <span className="font-medium text-ink-50">Your conversation is waiting: </span>
+          {prompt}
+        </p>
+      </div>
+      <Link href="/troubleshooter" className={buttonStyles({ variant: "primary", size: "sm", className: "h-10 shrink-0" })}>
+        <ArrowLeft aria-hidden className="size-4" />
+        Back to conversation
+      </Link>
     </div>
   );
 }

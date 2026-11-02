@@ -4,14 +4,16 @@ import { describe, expect, it } from "vitest";
 import { EquipmentPanel } from "@/components/studio/EquipmentPanel";
 import { PhotoViewer, adaptTransformToResize, clampTransform, fitSize, focusTransform, keepRegionVisible, regionCentreOnScreen, zoomAround } from "@/components/studio/PhotoViewer";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
+import { Troubleshooter } from "@/components/troubleshooter/Troubleshooter";
 import { demoLayoutView } from "@/data/studio-views";
 import { demoHotspots } from "@/data/hotspots";
 import type { StudioView } from "@/types";
-import { navigation } from "../setup";
+import { media, navigation } from "../setup";
 import { renderWithProviders } from "./render";
 
 describe("Studio Explorer", () => {
   it("selecting a hotspot updates the detail panel", async () => {
+    media.wide = true; // side panel layout
     const user = userEvent.setup();
     renderWithProviders(<StudioExplorer />);
     const panel = screen.getByRole("complementary", { name: "Selected equipment" });
@@ -41,6 +43,7 @@ describe("Studio Explorer", () => {
   });
 
   it("closing the panel clears the selection", async () => {
+    media.wide = true; // side panel layout
     const user = userEvent.setup();
     renderWithProviders(<StudioExplorer />);
     await user.click(screen.getByRole("tab", { name: "Video camera" }));
@@ -143,6 +146,37 @@ describe("Studio Explorer", () => {
   it("panel reports unknown equipment safely", () => {
     render(<EquipmentPanel equipmentId="toaster" onClose={() => {}} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Equipment not found");
+  });
+});
+
+describe("Studio Explorer on phones and tablets", () => {
+  it("shows the selected equipment in a compact bottom sheet that can expand and close", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<StudioExplorer />);
+    expect(screen.queryByRole("complementary", { name: "Selected equipment" })).not.toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: /^Mixing console/ })).getByRole("button", { name: "Main broadcast mixing console" }));
+    const sheet = screen.getByRole("complementary", { name: "Selected equipment" });
+    expect(within(sheet).getByRole("heading", { name: "Main broadcast mixing console" })).toBeInTheDocument();
+    expect(within(sheet).queryByText("Problems people report")).not.toBeInTheDocument(); // compact first
+    await user.click(within(sheet).getByRole("button", { name: "More details" }));
+    expect(within(sheet).getByText("Problems people report")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Show less" }));
+    await user.click(within(sheet).getByRole("button", { name: "Close equipment details" }));
+    expect(screen.queryByRole("complementary", { name: "Selected equipment" })).not.toBeInTheDocument();
+  });
+
+  it("offers a way back to the conversation", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <>
+        <Troubleshooter />
+        <StudioExplorer />
+      </>,
+    );
+    await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+    expect(screen.getByText("Your conversation is waiting:")).toBeInTheDocument();
+    const links = screen.getAllByRole("link", { name: "Back to conversation" });
+    expect(links[0]).toHaveAttribute("href", "/troubleshooter");
   });
 });
 

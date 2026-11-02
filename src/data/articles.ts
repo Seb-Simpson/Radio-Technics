@@ -75,25 +75,25 @@ export const articles: KnowledgeArticle[] = [
   },
   {
     id: "guide-zoom-camera",
-    title: "The Zoom video camera",
+    title: "The Zoom call camera",
     type: "equipment-guide",
-    summary: "What is known about the studio's video camera.",
+    summary: "The webcam the station uses for Zoom video calls.",
     equipmentIds: ["zoom-camera"],
-    status: "draft",
+    status: "station-reported",
     lastReviewed: null,
-    keywords: ["camera", "video", "zoom", "stream", "recording"],
+    keywords: ["camera", "video", "zoom", "webcam", "call", "video call"],
     sections: [
       {
-        heading: "What we know",
+        heading: "What it's for",
         status: "station-reported",
-        body: ["The studio has a Zoom video camera."],
+        body: ["The station uses this camera for Zoom video calls."],
       },
       {
         heading: "Awaiting engineer confirmation",
         status: "draft",
         body: [
-          "Whether “Zoom” is the camera's manufacturer or refers to Zoom video calls.",
-          "What the camera is used for, and which device it connects to.",
+          "Which computer the camera is connected to, and who sets up Zoom calls.",
+          "The manufacturer and model. A label on the camera reads \u201cHD 1080P WEBCAM X1\u201d.",
         ],
       },
     ],

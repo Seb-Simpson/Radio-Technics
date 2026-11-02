@@ -40,6 +40,8 @@ if (typeof window !== "undefined") {
 
 afterEach(() => {
   cleanup();
+  // Sessions persist in sessionStorage; never let one test's session leak into the next.
+  if (typeof window !== "undefined") window.sessionStorage.clear();
   navigation.pathname = "/";
   navigation.push.mockClear();
   media.wide = false;

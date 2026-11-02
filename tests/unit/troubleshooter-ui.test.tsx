@@ -109,21 +109,21 @@ describe("Troubleshooter UI", () => {
   it("asks for confirmation before clearing, and 'Keep' keeps everything", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Troubleshooter />);
-    expect(screen.getByRole("button", { name: "Start again" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "End session" })).toBeDisabled();
     await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
-    await user.click(screen.getByRole("button", { name: "Start again" }));
-    const dialog = screen.getByRole("alertdialog", { name: "Clear this conversation?" });
-    expect(within(dialog).getByRole("button", { name: "Keep conversation" })).toHaveFocus();
-    await user.click(within(dialog).getByRole("button", { name: "Keep conversation" }));
+    await user.click(screen.getByRole("button", { name: "End session" }));
+    const dialog = screen.getByRole("alertdialog", { name: "End this session?" });
+    expect(within(dialog).getByRole("button", { name: "Keep session" })).toHaveFocus();
+    await user.click(within(dialog).getByRole("button", { name: "Keep session" }));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(within(log()).getByText("the green thing isn't working")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Start again" }));
+    await user.click(screen.getByRole("button", { name: "End session" }));
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Start again" }));
-    await user.click(screen.getByRole("button", { name: "Clear conversation" }));
+    await user.click(screen.getByRole("button", { name: "End session" }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "End session" }));
     expect(within(log()).queryByText("the green thing isn't working")).not.toBeInTheDocument();
   });
 

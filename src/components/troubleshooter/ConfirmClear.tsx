@@ -30,17 +30,18 @@ export function ConfirmClear({ onConfirm, onCancel }: { onConfirm: () => void; o
         <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-caution-400" />
         <div className="min-w-0 flex-1">
           <p id="confirm-clear-title" className="text-sm font-semibold text-ink-50">
-            Clear this conversation?
+            End this session?
           </p>
           <p id="confirm-clear-description" className="mt-0.5 text-[13px] leading-relaxed text-ink-200">
-            Your answers, what you typed and the support summary will be removed. This can&apos;t be undone.
+            This clears the conversation, your answers, the support summary and the selected equipment from this computer. It
+            can&apos;t be undone.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button ref={keepRef} type="button" onClick={onCancel} className={buttonStyles({ size: "sm" })}>
-              Keep conversation
+              Keep session
             </button>
             <button type="button" onClick={onConfirm} className={buttonStyles({ variant: "ghost", size: "sm", className: "text-caution-300 hover:text-caution-300" })}>
-              Clear conversation
+              End session
             </button>
           </div>
         </div>

@@ -21,7 +21,7 @@ const universalIcons: Record<string, typeof CircleHelp> = {
 };
 
 export function Troubleshooter() {
-  const { conversation, send, restart } = useTroubleshooter();
+  const { conversation, send, endSession, restored, dismissRestored } = useTroubleshooter();
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
@@ -77,7 +77,7 @@ export function Troubleshooter() {
   };
   const confirmClear = () => {
     setConfirmingClear(false);
-    restart();
+    endSession();
   };
 
   const choose = (option: StepOption) => {
@@ -126,11 +126,28 @@ export function Troubleshooter() {
             className={buttonStyles({ variant: "ghost", size: "sm" })}
           >
             <RotateCcw aria-hidden className="size-3.5" />
-            Start again
+            End session
           </button>
         </header>
 
         {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
+
+        {restored && !confirmingClear && (
+          <div role="status" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
+            <p className="text-ink-200">
+              Your conversation from earlier in this browser tab has been restored. It is cleared when the tab is closed, after two hours
+              without use, or when you choose <span className="font-medium text-ink-50">End session</span>.
+            </p>
+            <button
+              type="button"
+              onClick={dismissRestored}
+              aria-label="Dismiss restored conversation message"
+              className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </div>
+        )}
 
         {selected && (
           <div className="flex items-center justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2 text-[13px] sm:px-5">

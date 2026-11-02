@@ -54,11 +54,11 @@ test("no violations in interactive states", async ({ page }) => {
   await input.fill("the green thing isn't working");
   await input.press("Enter");
   await expectNoAxeViolations(page, "troubleshooter question");
-  await page.getByRole("button", { name: "Start again" }).click();
+  await page.getByRole("button", { name: "End session" }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await expectNoAxeViolations(page, "clear confirmation");
   await expectValidIdReferences(page, "clear confirmation");
-  await page.getByRole("button", { name: "Keep conversation" }).click();
+  await page.getByRole("button", { name: "Keep session" }).click();
   await input.fill("dead air");
   await input.press("Enter");
   await expectNoAxeViolations(page, "urgent outcome");

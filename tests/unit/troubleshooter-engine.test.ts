@@ -213,7 +213,7 @@ describe("safety and robustness", () => {
     const after = say(state, "start again").state;
     expect(after.step).toEqual(state.step);
     expect(after.observations.map((o) => o.text)).toContain("I can't hear anything");
-    expect(lastAssistant(after)).toMatch(/Start again/);
+    expect(lastAssistant(after)).toMatch(/End session/);
   });
 
   it("only the explicit restart option clears the conversation", () => {

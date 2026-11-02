@@ -409,7 +409,7 @@ function handleText(state: ConversationState, rawText: string, context: EngineCo
   // 4. Typed "start again" never clears the conversation by itself.
   if (RESTART_WORDS.includes(u.normalised.replace(/[.!?]+$/, ""))) {
     return {
-      state: say(s, "To start a new problem, use the \u201cStart again\u201d button at the top of the conversation. Your answers so far are still here."),
+      state: say(s, "To start afresh, use the \u201cEnd session\u201d button at the top of the conversation. Your answers so far are still here."),
       commands: [],
     };
   }

@@ -68,7 +68,7 @@ describe("content integrity", () => {
       ...defaultContent,
       hotspots: [
         ...defaultContent.hotspots,
-        { id: "bad-hotspot", viewId: "missing-view", equipmentId: "toaster", region: { x: 0.9, y: 0.9, width: 0.5, height: 0.5 }, placeholder: true },
+        { id: "bad-hotspot", viewId: "missing-view", equipmentId: "toaster", region: { x: 0.9, y: 0.9, width: 0.5, height: 0.5 }, placeholder: true, identity: "draft" },
       ],
     });
     const messages = issues.map((i) => i.message).join("\n");
@@ -85,11 +85,17 @@ describe("content integrity", () => {
 describe("studio views", () => {
   it("falls back to the illustrative layout when no photographs exist", () => {
     expect(getStudioViews([])).toEqual([demoLayoutView]);
-    expect(getViews().every((v) => v.illustrative)).toBe(true);
+  });
+
+  it("shows the station's ten photographs, not the illustrative layout", () => {
+    const views = getViews();
+    expect(views).toHaveLength(10);
+    expect(views.every((v) => v.kind === "photo" && !v.illustrative && v.src?.startsWith("/studio/photos/"))).toBe(true);
   });
 
   it("finds a view showing a given equipment item", () => {
-    expect(findViewForEquipment("green-next-button")?.id).toBe("demo-layout");
+    expect(findViewForEquipment("green-next-button")?.id).toBe("green-button");
+    expect(findViewForEquipment("mixing-console")?.id).toBe("mixing-console");
     expect(findViewForEquipment("toaster")).toBeUndefined();
   });
 });

@@ -20,6 +20,8 @@ export default defineConfig({
   ],
   webServer: {
     command: `npx next start -p ${PORT}`,
+    // Enables the developer-only hotspot editor so it can be tested against the production build.
+    env: { RT_ENABLE_HOTSPOT_EDITOR: "1" },
     url: `http://localhost:${PORT}`,
     reuseExistingServer: true,
     timeout: 60_000,

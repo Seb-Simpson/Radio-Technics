@@ -18,15 +18,16 @@ async function visibleFraction(page: Page) {
 test("zoom and pan on desktop, then resize to mobile keeps the studio and selection visible (B1)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/studio");
-  await page.getByRole("button", { name: /^Technical equipment rack \(placeholder/ }).click();
+  const viewerGroup = page.getByRole("group", { name: /^Mixing console/ });
+  // A small item near the edge of the photo: the headphones knob.
+  await viewerGroup.getByRole("button", { name: "Headphone monitoring" }).click();
   for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Zoom in" }).click();
 
   // Drag hard towards one corner.
-  const viewer = page.getByRole("group", { name: /Illustrative layout/ });
-  const box = (await viewer.boundingBox())!;
-  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);
+  const box = (await viewerGroup.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.95, box.y + box.height * 0.95, { steps: 8 });
+  await page.mouse.move(box.x + box.width * 0.05, box.y + box.height * 0.05, { steps: 8 });
   await page.mouse.up();
 
   for (const width of [820, 390, 320]) {
@@ -34,12 +35,14 @@ test("zoom and pan on desktop, then resize to mobile keeps the studio and select
     await page.waitForTimeout(400);
     // The viewer is always filled by the image when zoomed — never empty.
     expect(await visibleFraction(page), `at ${width}px`).toBeGreaterThan(0.5);
-    const rack = page.getByRole("button", { name: /^Technical equipment rack \(placeholder/ });
-    const rackBox = (await rack.boundingBox())!;
-    const viewerBox = (await page.getByRole("group", { name: /Illustrative layout/ }).boundingBox())!;
-    const cx = rackBox.x + rackBox.width / 2;
+    const knob = (await viewerGroup.getByRole("button", { name: "Headphone monitoring" }).boundingBox())!;
+    const viewerBox = (await viewerGroup.boundingBox())!;
+    const cx = knob.x + knob.width / 2;
+    const cy = knob.y + knob.height / 2;
     expect(cx, `selected equipment visible at ${width}px`).toBeGreaterThanOrEqual(viewerBox.x);
     expect(cx).toBeLessThanOrEqual(viewerBox.x + viewerBox.width);
+    expect(cy).toBeGreaterThanOrEqual(viewerBox.y);
+    expect(cy).toBeLessThanOrEqual(viewerBox.y + viewerBox.height);
   }
 
   // Reset still restores the full view.
@@ -50,9 +53,9 @@ test("zoom and pan on desktop, then resize to mobile keeps the studio and select
 test("after dragging, Enter and Space still activate hotspots (B2)", async ({ page }) => {
   await page.goto("/studio");
   await page.getByRole("button", { name: "Zoom in" }).click();
-  const viewer = page.getByRole("group", { name: /Illustrative layout/ });
+  const viewer = page.getByRole("group", { name: /^Mixing console/ });
   // Start the drag on a hotspot — the case that used to leave clicks suppressed.
-  const consoleHotspot = page.getByRole("button", { name: /^Main broadcast mixing console \(placeholder/ });
+  const consoleHotspot = viewer.getByRole("button", { name: "Main broadcast mixing console" });
   const c = (await consoleHotspot.boundingBox())!;
   await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
   await page.mouse.down();

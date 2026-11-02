@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { EquipmentPanel } from "@/components/studio/EquipmentPanel";
 import { PhotoViewer, adaptTransformToResize, clampTransform, fitSize, focusTransform, keepRegionVisible, regionCentreOnScreen, zoomAround } from "@/components/studio/PhotoViewer";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
+import { demoLayoutView } from "@/data/studio-views";
+import { demoHotspots } from "@/data/hotspots";
 import type { StudioView } from "@/types";
 import { navigation } from "../setup";
 import { renderWithProviders } from "./render";
@@ -15,7 +17,8 @@ describe("Studio Explorer", () => {
     const panel = screen.getByRole("complementary", { name: "Selected equipment" });
     expect(within(panel).getByText("Select a piece of equipment")).toBeInTheDocument();
 
-    const hotspot = screen.getByRole("button", { name: /^Green Myriad button \(placeholder/ });
+    await user.click(screen.getByRole("tab", { name: "Green button" }));
+    const hotspot = within(screen.getByRole("group", { name: /^Green button/ })).getByRole("button", { name: "Green Myriad button" });
     await user.click(hotspot);
 
     expect(hotspot).toHaveAttribute("aria-pressed", "true");
@@ -32,7 +35,7 @@ describe("Studio Explorer", () => {
     renderWithProviders(<StudioExplorer />);
     const list = screen.getByRole("region", { name: "All equipment" });
     await user.click(within(list).getByRole("button", { name: "Main broadcast mixing console" }));
-    const hotspot = screen.getByRole("button", { name: /^Main broadcast mixing console \(placeholder/ });
+    const hotspot = screen.getByRole("group", { name: /^Mixing console/ }).querySelector('[data-equipment-id="mixing-console"]');
     expect(hotspot).toHaveAttribute("data-highlighted", "true");
     expect(screen.getByRole("heading", { level: 2, name: "Main broadcast mixing console" })).toBeInTheDocument();
   });
@@ -40,7 +43,8 @@ describe("Studio Explorer", () => {
   it("closing the panel clears the selection", async () => {
     const user = userEvent.setup();
     renderWithProviders(<StudioExplorer />);
-    await user.click(screen.getByRole("button", { name: /^Zoom video camera \(placeholder/ }));
+    await user.click(screen.getByRole("tab", { name: "Video camera" }));
+    await user.click(within(screen.getByRole("group", { name: /^Video camera/ })).getByRole("button", { name: "Zoom call camera" }));
     await user.click(screen.getByRole("button", { name: "Close equipment details" }));
     expect(screen.getByText("Select a piece of equipment")).toBeInTheDocument();
   });
@@ -48,13 +52,23 @@ describe("Studio Explorer", () => {
   it("'Troubleshoot this' starts the troubleshooter for that equipment", async () => {
     const user = userEvent.setup();
     renderWithProviders(<StudioExplorer />);
-    await user.click(screen.getByRole("button", { name: /^Green Myriad button \(placeholder/ }));
+    await user.click(screen.getByRole("tab", { name: "Green button" }));
+    await user.click(within(screen.getByRole("group", { name: /^Green button/ })).getByRole("button", { name: "Green Myriad button" }));
     await user.click(screen.getByRole("button", { name: "Troubleshoot this" }));
     expect(navigation.push).toHaveBeenCalledWith("/troubleshooter");
   });
 
-  it("explains that real photographs are missing and labels the illustrative layout", () => {
+  it("uses the real photographs by default, with no illustrative labelling", () => {
     renderWithProviders(<StudioExplorer />);
+    expect(screen.queryByText("Real studio photographs haven't been added yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("Illustrative layout — not the real studio")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(10);
+    expect(screen.getByRole("img", { name: /Mixing console with eight faders/ })).toHaveAttribute("src", "/studio/photos/mixing-console.jpg");
+    expect(screen.queryAllByRole("button", { name: /\(placeholder position\)/ })).toHaveLength(0);
+  });
+
+  it("falls back to the labelled illustrative layout when photographs are missing", () => {
+    renderWithProviders(<StudioExplorer views={[demoLayoutView]} hotspots={demoHotspots} />);
     expect(screen.getByText("Real studio photographs haven't been added yet")).toBeInTheDocument();
     expect(screen.getByText("Illustrative layout — not the real studio")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /\(placeholder position\)/ }).length).toBeGreaterThan(5);
@@ -82,7 +96,7 @@ describe("Studio Explorer", () => {
     render(
       <PhotoViewer
         view={photo}
-        hotspots={[{ id: "h1", viewId: "studio-01", equipmentId: "mixing-console", region: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, placeholder: false }]}
+        hotspots={[{ id: "h1", viewId: "studio-01", equipmentId: "mixing-console", region: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, placeholder: false, identity: "draft" }]}
         selectedEquipmentId={null}
         highlightedEquipmentId={null}
         onSelectEquipment={() => {}}
@@ -98,7 +112,7 @@ describe("Studio Explorer", () => {
     render(
       <PhotoViewer
         view={{ id: "v", title: "V", description: "", kind: "diagram", width: 100, height: 100, alt: "", illustrative: true }}
-        hotspots={[{ id: "h", viewId: "v", equipmentId: "toaster", region: { x: 0, y: 0, width: 0.5, height: 0.5 }, placeholder: true }]}
+        hotspots={[{ id: "h", viewId: "v", equipmentId: "toaster", region: { x: 0, y: 0, width: 0.5, height: 0.5 }, placeholder: true, identity: "draft" }]}
         selectedEquipmentId={null}
         highlightedEquipmentId={null}
         onSelectEquipment={() => {}}
@@ -118,7 +132,7 @@ describe("Studio Explorer", () => {
     await user.click(screen.getByRole("button", { name: "Reset zoom" }));
     expect(level).toHaveTextContent("100%");
 
-    const viewer = screen.getByRole("group", { name: /Illustrative layout/ });
+    const viewer = screen.getByRole("group", { name: /^Mixing console/ });
     viewer.focus();
     await user.keyboard("+");
     expect(level).toHaveTextContent("140%");

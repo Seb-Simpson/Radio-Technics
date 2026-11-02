@@ -34,7 +34,7 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
 });
 
-for (const path of ["/", "/studio", "/troubleshooter", "/knowledge", "/knowledge/guide-green-button", "/knowledge/ts-next-song-wont-play", "/admin"]) {
+for (const path of ["/", "/studio", "/dev/hotspots", "/troubleshooter", "/knowledge", "/knowledge/guide-green-button", "/knowledge/ts-next-song-wont-play", "/admin"]) {
   test(`no WCAG A/AA violations: ${path}`, async ({ page }) => {
     await page.goto(path);
     await expectNoAxeViolations(page, path);
@@ -44,7 +44,8 @@ for (const path of ["/", "/studio", "/troubleshooter", "/knowledge", "/knowledge
 
 test("no violations in interactive states", async ({ page }) => {
   await page.goto("/studio");
-  await page.getByRole("button", { name: /^Green Myriad button \(placeholder/ }).click();
+  await page.getByRole("tab", { name: "Green button" }).click();
+  await page.getByRole("group", { name: /^Green button/ }).getByRole("button", { name: "Green Myriad button" }).click();
   await expectNoAxeViolations(page, "studio with selection");
   await expectValidIdReferences(page, "studio with selection");
 

@@ -37,12 +37,12 @@ describe("session storage", () => {
   it("round-trips a conversation and workspace", () => {
     const storage = memoryStorage();
     const conversation = sampleConversation();
-    saveSession(storage, conversation, { selectedEquipmentId: "green-next-button", activeViewId: "green-button" }, NOW);
+    saveSession(storage, conversation, { selectedEquipmentId: "green-next-button", selectedHotspotId: "green-button-button", activeViewId: "green-button" }, NOW);
     const result = loadSession(storage, NOW + 1000);
     expect(result.status).toBe("restored");
     if (result.status !== "restored") return;
     expect(result.session.conversation).toEqual(conversation);
-    expect(result.session.workspace).toEqual({ selectedEquipmentId: "green-next-button", activeViewId: "green-button" });
+    expect(result.session.workspace).toEqual({ selectedEquipmentId: "green-next-button", selectedHotspotId: "green-button-button", activeViewId: "green-button" });
   });
 
   it("expires after the idle limit and deletes the data", () => {

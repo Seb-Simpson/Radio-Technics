@@ -23,6 +23,10 @@ export const media = { wide: false };
 
 // Node-environment suites (e.g. the photo pipeline) have no window.
 if (typeof window !== "undefined") {
+  // jsdom never downloads images, so `naturalWidth` is always 0. Treat images
+  // as loaded; tests that need a failure dispatch an `error` event instead.
+  Object.defineProperty(HTMLImageElement.prototype, "naturalWidth", { configurable: true, get: () => 1 });
+
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({

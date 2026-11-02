@@ -3,6 +3,8 @@ import type { WorkspaceCommand } from "./commands";
 
 export interface WorkspaceState {
   selectedEquipmentId: string | null;
+  /** The exact hotspot chosen, if selection came from a region of a photo. */
+  selectedHotspotId: string | null;
   highlightedEquipmentId: string | null;
   activeViewId: string | null;
   /** Changes whenever the viewer should zoom to an equipment item. */
@@ -11,6 +13,7 @@ export interface WorkspaceState {
 
 export const initialWorkspaceState: WorkspaceState = {
   selectedEquipmentId: null,
+  selectedHotspotId: null,
   highlightedEquipmentId: null,
   activeViewId: null,
   focusRequest: null,
@@ -31,6 +34,7 @@ export function workspaceReducer(state: WorkspaceState, command: WorkspaceComman
       return {
         ...state,
         selectedEquipmentId: command.equipmentId,
+        selectedHotspotId: command.hotspotId ?? null,
         highlightedEquipmentId:
           state.highlightedEquipmentId === command.equipmentId ? state.highlightedEquipmentId : null,
       };
@@ -48,10 +52,12 @@ export function workspaceReducer(state: WorkspaceState, command: WorkspaceComman
     case "show_view":
       return { ...state, activeViewId: command.viewId };
     case "clear_selection":
-      return { ...state, selectedEquipmentId: null, highlightedEquipmentId: null };
+      return { ...state, selectedEquipmentId: null, selectedHotspotId: null, highlightedEquipmentId: null };
     case "open_studio_explorer":
       // Navigation is a side effect handled by the provider.
-      return command.equipmentId ? { ...state, selectedEquipmentId: command.equipmentId } : state;
+      return command.equipmentId && command.equipmentId !== state.selectedEquipmentId
+        ? { ...state, selectedEquipmentId: command.equipmentId, selectedHotspotId: null }
+        : state;
   }
 }
 

@@ -34,7 +34,29 @@ export const defaultContent: ContentBundle = {
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STATUSES: readonly VerificationStatus[] = ["verified", "station-reported", "draft"];
 const AUDIO_CLAIMS: readonly AudioClaim[] = ["present", "absent"];
-const PLACEHOLDER_NAMES = /^(tbc|tbd|unknown|n\/a|na|none|test|todo|engineer|\?+)$/i;
+/** Values that look like an entry but carry no information. */
+const PLACEHOLDER = /^(tbc|tbd|tba|unknown|n\/?a|none|nil|null|test|testing|todo|pending|placeholder|see above|same|various|misc|other|x+|\?+|-+|\.+|engineer|the engineer|station engineer|staff|someone|me)$/i;
+
+/**
+ * Provenance must say where something came from in words a person could
+ * follow up. Placeholders ("TBC", "n/a", "---") and one-word stubs fail.
+ * Note: this checks that the evidence is meaningfully recorded; it cannot
+ * prove that an engineer really approved anything.
+ */
+export function isMeaningfulProvenance(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  if (PLACEHOLDER.test(text)) return false;
+  const words = text.split(/\s+/).filter((w) => /[a-z]{2,}/i.test(w));
+  return words.length >= 2 && text.replace(/[^a-z]/gi, "").length >= 6;
+}
+
+/** A reviewer must be identifiable: a name, or a name with a role — not a bare role or placeholder. */
+function isIdentifiableReviewer(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  return text.length >= 2 && !PLACEHOLDER.test(text) && /[a-z]{2,}/i.test(text);
+}
 const PHOTO_SRC = /^\/studio\/photos\/[a-z0-9-]+\.(jpe?g|png|webp)$/;
 const EARLIEST_REVIEW = "2020-01-01";
 
@@ -64,13 +86,13 @@ export function validateReview(review: unknown, now: Date = new Date()): string[
   if (typeof review !== "object" || review === null) return ["review record is missing"];
   const r = review as Partial<ReviewRecord>;
   const errors: string[] = [];
-  if (typeof r.reviewer !== "string" || r.reviewer.trim().length < 2 || PLACEHOLDER_NAMES.test(r.reviewer.trim())) {
+  if (!isIdentifiableReviewer(r.reviewer)) {
     errors.push("review needs the reviewer's name or role");
   }
   if (!isValidIsoDate(r.date)) errors.push("review date must be a real date in YYYY-MM-DD format");
   else if (r.date > todayIso(now)) errors.push("review date is in the future");
   else if (r.date < EARLIEST_REVIEW) errors.push("review date is implausibly early");
-  if (typeof r.source !== "string" || r.source.trim().length < 3) errors.push("review needs a source (how it was confirmed)");
+  if (!isMeaningfulProvenance(r.source)) errors.push("review needs a meaningful source describing how it was confirmed (not a placeholder such as TBC or n/a)");
   return errors;
 }
 
@@ -95,6 +117,7 @@ function checkFact(label: string, fact: Fact, now: Date): string[] {
   const issues = checkVerification(label, fact.status, fact.review, now);
   if (!fact.text?.trim()) issues.push(`${label} has no text`);
   if (fact.status === "station-reported" && !fact.source?.trim()) issues.push(`${label} is station-reported but has no source`);
+  else if (fact.source !== undefined && !isMeaningfulProvenance(fact.source)) issues.push(`${label} has a placeholder source "${fact.source}"`);
   return issues;
 }
 

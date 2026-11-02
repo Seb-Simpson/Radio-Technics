@@ -23,6 +23,7 @@ const MAX_TEXT = 2000;
 
 export interface SavedWorkspace {
   selectedEquipmentId: string | null;
+  selectedHotspotId?: string | null;
   activeViewId: string | null;
 }
 
@@ -204,6 +205,7 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
   const ws = isObject(data.workspace) ? data.workspace : {};
   const workspace: SavedWorkspace = {
     selectedEquipmentId: typeof ws.selectedEquipmentId === "string" ? ws.selectedEquipmentId : null,
+    selectedHotspotId: typeof ws.selectedHotspotId === "string" ? ws.selectedHotspotId : null,
     activeViewId: typeof ws.activeViewId === "string" ? ws.activeViewId : null,
   };
   return { status: "restored", session: { version: SESSION_VERSION, lastActivityAt: last, conversation, workspace } };

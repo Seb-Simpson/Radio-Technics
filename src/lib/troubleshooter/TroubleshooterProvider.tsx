@@ -56,6 +56,8 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
   const [loaded, setLoaded] = useState(false);
   const current = useRef(conversation);
   const selected = useRef(workspace.selectedEquipmentId);
+  const selectionKey = `${workspace.selectedEquipmentId ?? ""}|${workspace.selectedHotspotId ?? ""}`;
+  const lastSelectionKey = useRef(selectionKey);
   /** Time of the last user action, or null when there is nothing to expire. */
   const lastActivity = useRef<number | null>(null);
   /** Workspace changes caused by restoring/expiring are not user activity. */
@@ -90,7 +92,8 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
 
   // Track the latest selection; a selection change made by the user counts as activity.
   useEffect(() => {
-    const changed = selected.current !== workspace.selectedEquipmentId;
+    const changed = lastSelectionKey.current !== selectionKey;
+    lastSelectionKey.current = selectionKey;
     selected.current = workspace.selectedEquipmentId;
     if (!loaded || !changed) return;
     if (systemChange.current) {
@@ -98,7 +101,7 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       return;
     }
     if (workspace.selectedEquipmentId !== null && !enforceExpiry()) touch();
-  }, [workspace.selectedEquipmentId, loaded, enforceExpiry, touch]);
+  }, [selectionKey, workspace.selectedEquipmentId, loaded, enforceExpiry, touch]);
 
   // Restore once, after mount (keeps server and client renders identical).
   useEffect(() => {
@@ -110,7 +113,10 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       lastActivity.current = lastActivityAt;
       const commands: WorkspaceCommand[] = [];
       if (ws.activeViewId) commands.push({ type: "show_view", viewId: ws.activeViewId });
-      if (ws.selectedEquipmentId) commands.push({ type: "select_equipment", equipmentId: ws.selectedEquipmentId });
+      // Validated like any other command: an unknown or mismatched hotspot ID is rejected.
+      if (ws.selectedEquipmentId) {
+        commands.push({ type: "select_equipment", equipmentId: ws.selectedEquipmentId, ...(ws.selectedHotspotId ? { hotspotId: ws.selectedHotspotId } : {}) });
+      }
       if (commands.length > 0) {
         if (ws.selectedEquipmentId) systemChange.current = true;
         run(commands);
@@ -149,8 +155,13 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       clearSession(storage);
       return;
     }
-    saveSession(storage, conversation, { selectedEquipmentId: workspace.selectedEquipmentId, activeViewId: workspace.activeViewId }, lastActivity.current);
-  }, [loaded, conversation, workspace.selectedEquipmentId, workspace.activeViewId]);
+    saveSession(
+      storage,
+      conversation,
+      { selectedEquipmentId: workspace.selectedEquipmentId, selectedHotspotId: workspace.selectedHotspotId, activeViewId: workspace.activeViewId },
+      lastActivity.current,
+    );
+  }, [loaded, conversation, workspace.selectedEquipmentId, workspace.selectedHotspotId, workspace.activeViewId]);
 
   const send = useCallback(
     (input: UserInput) => {

@@ -104,7 +104,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
   const hasRealPhotos = views.some((view) => !view.illustrative);
   const selectedInView = viewHotspots.some((h) => h.equipmentId === state.selectedEquipmentId);
 
-  const selectEquipment = (equipmentId: string) => run([{ type: "select_equipment", equipmentId }]);
+  const selectEquipment = (equipmentId: string, hotspotId?: string) => run([{ type: "select_equipment", equipmentId, hotspotId }]);
   const findEquipment = (equipmentId: string) =>
     run([
       { type: "select_equipment", equipmentId },
@@ -128,7 +128,12 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
       onTroubleshoot={canTroubleshoot ? troubleshoot : undefined}
       troubleshootLabel={embedded ? "Use in troubleshooter" : "Troubleshoot this"}
       inCurrentView={selectedInView}
-      photoHotspot={viewHotspots.find((h) => h.equipmentId === state.selectedEquipmentId) ?? null}
+      // The exact region the user chose; otherwise the first region for that equipment in this photo.
+      photoHotspot={
+        viewHotspots.find((h) => h.id === state.selectedHotspotId) ??
+        viewHotspots.find((h) => h.equipmentId === state.selectedEquipmentId) ??
+        null
+      }
     />
   );
 
@@ -155,6 +160,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
               view={activeView}
               hotspots={viewHotspots}
               selectedEquipmentId={state.selectedEquipmentId}
+              selectedHotspotId={state.selectedHotspotId}
               highlightedEquipmentId={state.highlightedEquipmentId}
               focusRequest={state.focusRequest}
               onSelectEquipment={selectEquipment}

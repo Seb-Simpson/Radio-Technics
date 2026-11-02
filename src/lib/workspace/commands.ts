@@ -1,4 +1,5 @@
 import { getEquipmentById } from "@/lib/content/equipment";
+import { hotspots } from "@/data/hotspots";
 import { getViewById } from "@/lib/content/views";
 
 /**
@@ -10,7 +11,8 @@ import { getViewById } from "@/lib/content/views";
  * Commands never reach physical studio equipment.
  */
 export type WorkspaceCommand =
-  | { type: "select_equipment"; equipmentId: string }
+  /** `hotspotId` identifies the exact region chosen, when several show the same equipment. */
+  | { type: "select_equipment"; equipmentId: string; hotspotId?: string }
   | { type: "highlight_equipment"; equipmentId: string }
   | { type: "open_studio_explorer"; equipmentId?: string }
   | { type: "show_view"; viewId: string }
@@ -54,7 +56,16 @@ export function validateWorkspaceCommand(input: unknown): CommandValidation {
   if (!isCommandType(type)) return { ok: false, error: `Unsupported command type: ${String(type)}` };
 
   switch (type) {
-    case "select_equipment":
+    case "select_equipment": {
+      const error = checkEquipmentId(input.equipmentId);
+      if (error) return { ok: false, error };
+      const equipmentId = input.equipmentId as string;
+      if (input.hotspotId === undefined) return { ok: true, command: { type, equipmentId } };
+      const hotspot = typeof input.hotspotId === "string" ? hotspots.find((h) => h.id === input.hotspotId) : undefined;
+      if (!hotspot) return { ok: false, error: `Unknown hotspot ID: "${String(input.hotspotId)}"` };
+      if (hotspot.equipmentId !== equipmentId) return { ok: false, error: `Hotspot "${hotspot.id}" does not show "${equipmentId}"` };
+      return { ok: true, command: { type, equipmentId, hotspotId: hotspot.id } };
+    }
     case "highlight_equipment": {
       const error = checkEquipmentId(input.equipmentId);
       if (error) return { ok: false, error };

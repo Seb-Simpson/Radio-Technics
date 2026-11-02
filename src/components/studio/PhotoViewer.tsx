@@ -99,8 +99,10 @@ export interface PhotoViewerProps {
   view: StudioView;
   hotspots: Hotspot[];
   selectedEquipmentId: string | null;
+  /** When set, only this hotspot shows as selected (others for the same equipment don't). */
+  selectedHotspotId?: string | null;
   highlightedEquipmentId: string | null;
-  onSelectEquipment: (equipmentId: string) => void;
+  onSelectEquipment: (equipmentId: string, hotspotId: string) => void;
   focusRequest?: { equipmentId: string; token: number } | null;
   className?: string;
   /**
@@ -114,6 +116,7 @@ export function PhotoViewer({
   view,
   hotspots,
   selectedEquipmentId,
+  selectedHotspotId = null,
   highlightedEquipmentId,
   onSelectEquipment,
   focusRequest,
@@ -170,11 +173,16 @@ export function PhotoViewer({
     return () => observer.disconnect();
   }, []);
 
-  // Reset zoom and error state when switching views.
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  // Reset zoom and error state when switching views. A photo can fail BEFORE
+  // React attaches onError (e.g. an immediate 404 during page load), so also
+  // check whether the image has already finished without any pixels.
   useEffect(() => {
     setTransform(IDENTITY);
-    setImageFailed(false);
     handledFocusToken.current = null;
+    const img = imageRef.current;
+    setImageFailed(Boolean(img && img.getAttribute("src") && img.complete && img.naturalWidth === 0));
   }, [view.id]);
 
   const update = useCallback(
@@ -400,6 +408,8 @@ export function PhotoViewer({
           {view.kind === "photo" && view.src && !imageFailed ? (
             // eslint-disable-next-line @next/next/no-img-element -- transforms are applied manually
             <img
+              ref={imageRef}
+              key={view.id}
               src={view.src}
               alt={view.alt}
               draggable={false}
@@ -415,14 +425,14 @@ export function PhotoViewer({
               <HotspotButton
                 key={hotspot.id}
                 hotspot={hotspot}
-                selected={hotspot.equipmentId === selectedEquipmentId}
+                selected={selectedHotspotId ? hotspot.id === selectedHotspotId : hotspot.equipmentId === selectedEquipmentId}
                 highlighted={hotspot.equipmentId === highlightedEquipmentId}
                 onFocus={(event) => revealHotspot(hotspot, event.currentTarget)}
                 onActivate={(event) => {
                   // detail === 0: activated by keyboard (Enter/Space), never a drag.
                   if (suppressClick.current && event.detail !== 0) return;
                   suppressClick.current = false;
-                  onSelectEquipment(hotspot.equipmentId);
+                  onSelectEquipment(hotspot.equipmentId, hotspot.id);
                 }}
               />
             ))}

@@ -1,0 +1,43 @@
+import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+
+/** Mutable mock router state shared with tests. */
+export const navigation = {
+  pathname: "/",
+  push: vi.fn((href: string) => {
+    navigation.pathname = href;
+  }),
+};
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigation.pathname,
+  useRouter: () => ({ push: navigation.push, replace: vi.fn(), back: vi.fn(), prefetch: vi.fn(), refresh: vi.fn() }),
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+}));
+
+/** Controls whether the troubleshooter's embedded studio is shown (wide screens). */
+export const media = { wide: false };
+
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: (query: string) => ({
+    matches: media.wide,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }),
+});
+
+afterEach(() => {
+  cleanup();
+  navigation.pathname = "/";
+  navigation.push.mockClear();
+  media.wide = false;
+});

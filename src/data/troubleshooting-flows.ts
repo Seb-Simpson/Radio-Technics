@@ -1,0 +1,289 @@
+import type { FlowNode, TroubleshootingTopic } from "@/lib/troubleshooter/types";
+
+/**
+ * Scripted troubleshooting flows for the RT-001 prototype.
+ *
+ * SAFETY RULES
+ * - Questions gather information only. No node may prescribe a technical fix
+ *   unless the station engineer has verified it.
+ * - Every question node needs `unsureNext`. Every path ends in an outcome
+ *   that offers technical support — no dead ends.
+ * - Ask one thing at a time, in plain English.
+ */
+
+const YES = ["yes", "yeah", "yep", "y", "it is", "correct"];
+const NO = ["no", "nope", "n", "it isn't", "it is not"];
+
+export const flowNodes: FlowNode[] = [
+  /* ---------------- Green button ---------------- */
+  {
+    id: "gb-screen",
+    kind: "question",
+    prompt: "What happened on the Myriad screen after you pressed the green button?",
+    showEquipmentId: "myriad-playout",
+    options: [
+      { id: "nothing", label: "Nothing changed", next: "gb-current-song", match: ["nothing", "nothing happened"] },
+      { id: "unexpected", label: "Something unexpected happened", next: "gb-unexpected", match: ["unexpected", "something else"] },
+      { id: "cant-see", label: "I can't see the Myriad screen", next: "gb-find-screen", match: ["can't see", "cant see", "where is myriad"] },
+    ],
+    unsureNext: "gb-find-screen",
+  },
+  {
+    id: "gb-current-song",
+    kind: "question",
+    prompt: "Is the song that was already playing still playing?",
+    showEquipmentId: "myriad-playout",
+    options: [
+      { id: "yes", label: "Yes, it's still playing", next: "outcome-report", match: YES },
+      { id: "no-silent", label: "No — there's silence", next: "outcome-urgent", match: ["silence", "silent", "nothing playing", ...NO] },
+    ],
+    unsureNext: "outcome-report",
+  },
+  {
+    id: "gb-unexpected",
+    kind: "question",
+    prompt: "Which of these is closest to what happened?",
+    showEquipmentId: "myriad-playout",
+    options: [
+      { id: "skipped", label: "It skipped more than one song", next: "outcome-report", match: ["skipped"] },
+      { id: "different", label: "A different song started from the one I expected", next: "outcome-report", match: ["different song", "wrong song"] },
+      { id: "other", label: "Something else", next: "outcome-report", match: ["something else", "other"] },
+    ],
+    unsureNext: "outcome-report",
+  },
+  {
+    id: "gb-find-screen",
+    kind: "question",
+    prompt: "Myriad is software, so it appears on one of the studio computer screens. Can you find the screen showing Myriad?",
+    help: "Choose “Show me where” to see where it is in the Studio Explorer.",
+    showEquipmentId: "myriad-playout",
+    options: [
+      { id: "found", label: "Yes, I've found it", next: "gb-screen", match: [...YES, "found it"] },
+      { id: "not-found", label: "No, I can't find it", next: "outcome-report", match: NO },
+    ],
+    unsureNext: "outcome-report",
+  },
+
+  /* ---------------- Myriad ---------------- */
+  {
+    id: "my-start",
+    kind: "question",
+    prompt: "What are you seeing on the Myriad screen?",
+    showEquipmentId: "myriad-playout",
+    options: [
+      { id: "listed", label: "The next song is listed but won't start", next: "my-how-start", match: ["won't start", "wont start", "listed"] },
+      { id: "frozen", label: "The screen looks frozen or isn't responding", next: "outcome-report", match: ["frozen", "stuck", "not responding"] },
+      { id: "other", label: "Something else", next: "outcome-report", match: ["something else", "other"] },
+    ],
+    unsureNext: "gb-find-screen",
+  },
+  {
+    id: "my-how-start",
+    kind: "question",
+    prompt: "How were you trying to start the next song?",
+    showEquipmentId: "myriad-playout",
+    options: [
+      { id: "green", label: "With the green button", next: "gb-screen", setEquipmentId: "green-next-button", match: ["green", "button"] },
+      { id: "screen", label: "On the Myriad screen", next: "outcome-report", match: ["screen", "mouse", "clicked"] },
+    ],
+    unsureNext: "outcome-report",
+  },
+
+  /* ---------------- Microphones ---------------- */
+  {
+    id: "mic-problem",
+    kind: "question",
+    prompt: "What's the problem with the {equipment}?",
+    options: [
+      { id: "not-heard", label: "Other people can't hear it", next: "mic-meters", match: ["can't hear me", "cant hear me", "no one can hear", "listeners"] },
+      { id: "not-in-headphones", label: "I can't hear it in my headphones", next: "mic-headphones", match: ["headphones"] },
+      { id: "sounds-wrong", label: "It sounds wrong (crackly, quiet or distorted)", next: "mic-since", match: ["crackly", "quiet", "distorted", "sounds wrong", "crackling"] },
+    ],
+    unsureNext: "mic-meters",
+  },
+  {
+    id: "mic-meters",
+    kind: "question",
+    prompt: "When someone speaks into the microphone, do the level meters move?",
+    help: "Level meters are the bars or lights that bounce up and down when there is sound.",
+    showEquipmentId: "audio-level-meters",
+    options: [
+      { id: "move", label: "Yes, they move", next: "mic-since", match: [...YES, "they move"] },
+      { id: "still", label: "No, they don't move", next: "mic-since", match: [...NO, "don't move", "dont move"] },
+    ],
+    unsureNext: "mic-since",
+  },
+  {
+    id: "mic-headphones",
+    kind: "question",
+    prompt: "Can you hear other sounds in your headphones, such as music playing?",
+    showEquipmentId: "headphone-monitoring",
+    options: [
+      { id: "yes", label: "Yes, I can hear other sounds", next: "mic-since", match: YES },
+      { id: "no", label: "No, I can't hear anything", next: "mic-since", match: NO },
+    ],
+    unsureNext: "mic-since",
+  },
+  {
+    id: "mic-since",
+    kind: "question",
+    prompt: "Was this microphone working earlier today?",
+    options: [
+      { id: "yes", label: "Yes, it was working earlier", next: "outcome-report", match: YES },
+      { id: "no", label: "No, it hasn't worked today", next: "outcome-report", match: NO },
+    ],
+    unsureNext: "outcome-report",
+  },
+
+  /* ---------------- "I can't hear anything" ---------------- */
+  {
+    id: "hear-where",
+    kind: "question",
+    prompt: "Where are you trying to hear the sound?",
+    options: [
+      { id: "headphones", label: "In my headphones", next: "hear-headphones", setEquipmentId: "headphone-monitoring", match: ["headphones", "headphone"] },
+      { id: "speakers", label: "Through the studio speakers", next: "hear-speakers", setEquipmentId: "studio-monitor-speakers", match: ["speakers", "speaker"] },
+      { id: "listeners", label: "Listeners say they can't hear the station", next: "hear-on-air", match: ["listeners", "on air", "radio"] },
+    ],
+    unsureNext: "hear-meters",
+  },
+  {
+    id: "hear-headphones",
+    kind: "question",
+    prompt: "Is anything at all coming through your headphones?",
+    showEquipmentId: "headphone-monitoring",
+    options: [
+      { id: "nothing", label: "Nothing at all", next: "hear-meters", match: ["nothing", ...NO] },
+      { id: "some", label: "Some sounds, but not everything", next: "hear-meters", match: ["some", "some sounds"] },
+    ],
+    unsureNext: "hear-meters",
+  },
+  {
+    id: "hear-speakers",
+    kind: "question",
+    prompt: "Is anything at all coming through the studio speakers?",
+    showEquipmentId: "studio-monitor-speakers",
+    options: [
+      { id: "nothing", label: "Nothing at all", next: "hear-meters", match: ["nothing", ...NO] },
+      { id: "some", label: "Some sounds, but not everything", next: "hear-meters", match: ["some", "some sounds"] },
+    ],
+    unsureNext: "hear-meters",
+  },
+  {
+    id: "hear-on-air",
+    kind: "question",
+    prompt: "Do you think the station might be silent on air right now?",
+    options: [
+      { id: "yes", label: "Yes, it might be silent", next: "outcome-urgent", match: [...YES, "silent"] },
+      { id: "no", label: "No, there is sound but something is missing", next: "hear-meters", match: NO },
+    ],
+    unsureNext: "outcome-urgent",
+  },
+  {
+    id: "hear-meters",
+    kind: "question",
+    prompt: "While audio should be playing, do the level meters move?",
+    help: "Level meters are the bars or lights that bounce up and down when there is sound.",
+    showEquipmentId: "audio-level-meters",
+    options: [
+      { id: "move", label: "Yes, they move", next: "outcome-report", match: [...YES, "they move"] },
+      { id: "still", label: "No, they don't move", next: "outcome-report", match: [...NO, "don't move", "dont move"] },
+    ],
+    unsureNext: "outcome-report",
+  },
+
+  /* ---------------- Cables ---------------- */
+  {
+    id: "cable-where",
+    kind: "question",
+    prompt: "Thanks for spotting that. Which equipment is the cable near?",
+    help: "The station hasn't confirmed how its equipment should be connected, so please don't plug in or move cables you're unsure about — especially while on air.",
+    options: [
+      { id: "console", label: "The mixing console", next: "outcome-cable", setEquipmentId: "mixing-console", match: ["console", "mixer", "desk"] },
+      { id: "computer", label: "A studio computer", next: "outcome-cable", setEquipmentId: "studio-computers", match: ["computer", "pc", "screen"] },
+      { id: "rack", label: "The equipment rack", next: "outcome-cable", setEquipmentId: "equipment-rack", match: ["rack", "cabinet"] },
+      { id: "other", label: "Somewhere else", next: "outcome-cable", match: ["somewhere else", "other", "elsewhere"] },
+    ],
+    unsureNext: "outcome-cable",
+  },
+
+  /* ---------------- Generic equipment ---------------- */
+  {
+    id: "generic-symptom",
+    kind: "question",
+    prompt: "What's happening with the {equipment}?",
+    options: [
+      { id: "nothing", label: "It isn't doing anything", next: "generic-since", match: ["nothing", "not doing anything", "dead"] },
+      { id: "unexpected", label: "It's doing something unexpected", next: "generic-since", match: ["unexpected", "weird", "strange"] },
+      { id: "error", label: "It's showing an error or making a strange noise", next: "generic-since", match: ["error", "noise", "beeping"] },
+    ],
+    unsureNext: "generic-since",
+  },
+  {
+    id: "generic-since",
+    kind: "question",
+    prompt: "Was the {equipment} working normally earlier today?",
+    options: [
+      { id: "yes", label: "Yes, it was working earlier", next: "outcome-report", match: YES },
+      { id: "no", label: "No, it hasn't worked today", next: "outcome-report", match: NO },
+    ],
+    unsureNext: "outcome-report",
+  },
+
+  /* ---------------- Outcomes ---------------- */
+  {
+    id: "outcome-report",
+    kind: "outcome",
+    prompt:
+      "Thanks — that's everything I can check for now. The station hasn't yet provided a verified procedure for this problem, so I won't guess at a fix. Please contact technical support and pass on the summary below.",
+    options: [],
+  },
+  {
+    id: "outcome-urgent",
+    kind: "outcome",
+    urgent: true,
+    prompt:
+      "Possible silence on air needs attention straight away. Contact technical support now and tell them the station may be silent. If the station has its own emergency procedure, follow it.",
+    options: [],
+  },
+  {
+    id: "outcome-cable",
+    kind: "outcome",
+    prompt:
+      "Please report the cable to technical support using the summary below. Don't reconnect it unless an engineer has told you how.",
+    options: [],
+  },
+];
+
+export const troubleshootingTopics: TroubleshootingTopic[] = [
+  {
+    id: "topic-microphone",
+    label: "My microphone isn't working",
+    description: "Nobody can hear you, or it sounds wrong.",
+    utterance: "My microphone isn't working",
+  },
+  {
+    id: "topic-next-song",
+    label: "The next song won't play",
+    description: "Myriad or the green button isn't moving on.",
+    utterance: "The next song won't play",
+  },
+  {
+    id: "topic-cant-hear",
+    label: "I can't hear anything",
+    description: "Nothing in headphones or speakers.",
+    utterance: "I can't hear anything",
+  },
+  {
+    id: "topic-not-responding",
+    label: "Something isn't responding",
+    description: "Not sure what's wrong? Start here.",
+    utterance: "It's not doing anything",
+  },
+  {
+    id: "topic-cable",
+    label: "A cable looks unplugged",
+    description: "A wire or lead looks disconnected.",
+    utterance: "A wire isn't plugged in",
+  },
+];

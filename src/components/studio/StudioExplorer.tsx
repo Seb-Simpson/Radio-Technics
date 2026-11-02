@@ -20,6 +20,11 @@ import { EquipmentPanel } from "./EquipmentPanel";
 import { EquipmentSheet } from "./EquipmentSheet";
 import { PhotoViewer } from "./PhotoViewer";
 
+/** Attribute-selector escaping (CSS.escape is missing in some test environments). */
+function cssEscape(value: string): string {
+  return typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(value) : value.replace(/["\\]/g, "\\$&");
+}
+
 export interface StudioExplorerProps {
   variant?: "full" | "embedded";
   /** Overrides for tests and future data sources. */
@@ -75,16 +80,26 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
     if (useSheet && sheetHeight > 0) revealFocused(document.activeElement);
   }, [useSheet, sheetHeight, revealFocused]);
 
-  /** Closing details returns focus to the item's hotspot (or the photo), never to nowhere. */
+  /**
+   * Closing details returns focus to the exact hotspot that was chosen (or the
+   * first one for that equipment, or the photo), never to nowhere. The return
+   * happens a frame later, so it is skipped if the user has focused something
+   * else by then (RT-QA-002B: a delayed restore must not override newer focus).
+   */
   const closeDetails = () => {
     const equipmentId = state.selectedEquipmentId;
-    const focusWasInPanel = document.activeElement?.closest('[aria-label="Selected equipment"]') !== null;
+    const hotspotId = state.selectedHotspotId;
+    const focusWasInPanel = document.activeElement?.closest('[aria-label="Selected equipment"]') != null;
     run([{ type: "clear_selection" }]);
     if (!focusWasInPanel) return;
     requestAnimationFrame(() => {
+      const current = document.activeElement;
+      const focusLost = !current || current === document.body || !current.isConnected;
+      if (!focusLost) return;
       const viewer = viewerRef.current;
       const target =
-        (equipmentId && viewer?.querySelector<HTMLElement>(`[data-equipment-id="${equipmentId}"]`)) ||
+        (hotspotId && viewer?.querySelector<HTMLElement>(`[data-hotspot-id="${cssEscape(hotspotId)}"]`)) ||
+        (equipmentId && viewer?.querySelector<HTMLElement>(`[data-equipment-id="${cssEscape(equipmentId)}"]`)) ||
         viewer?.querySelector<HTMLElement>('[aria-roledescription="zoomable studio view"]');
       target?.focus();
     });

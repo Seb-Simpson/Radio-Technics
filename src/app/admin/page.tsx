@@ -82,7 +82,7 @@ export default function AdminPage() {
           article.title,
           articleTypeLabels[article.type],
           <VerificationBadge key="status" status={article.status} />,
-          article.lastReviewed ?? "Never",
+          article.review ? `${article.review.date} (${article.review.reviewer})` : "Never",
         ])}
       />
 

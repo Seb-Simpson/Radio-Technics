@@ -74,7 +74,7 @@ describe("content integrity", () => {
     const messages = issues.map((i) => i.message).join("\n");
     expect(messages).toMatch(/missing equipment "toaster"/);
     expect(messages).toMatch(/missing view "missing-view"/);
-    expect(messages).toMatch(/outside the image/);
+    expect(messages).toMatch(/past the edge of the image/);
   });
 
   it("every hotspot references a real equipment record (hotspots don't duplicate content)", () => {

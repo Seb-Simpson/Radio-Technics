@@ -20,11 +20,25 @@
  */
 export type VerificationStatus = "verified" | "station-reported" | "draft";
 
+/**
+ * Evidence that the station engineer reviewed something. Required for
+ * anything marked `verified`; validated by validateContent().
+ */
+export interface ReviewRecord {
+  /** Name or role of the engineer who reviewed it. */
+  reviewer: string;
+  /** Calendar date of the review, YYYY-MM-DD. */
+  date: string;
+  /** Where the confirmation came from (e.g. "Engineer walkthrough", "Email from engineer"). */
+  source: string;
+}
+
 export interface Fact {
   text: string;
   status: VerificationStatus;
-  /** Where the information came from (e.g. a photograph or a station message). */
+  /** Where the information came from (e.g. a photograph or a station message). Required when station-reported. */
   source?: string;
+  review?: ReviewRecord;
 }
 
 /* ------------------------------------------------------------------ */
@@ -114,6 +128,7 @@ export interface Hotspot {
   identity: VerificationStatus;
   /** How the item was identified, or what is uncertain about it. */
   note?: string;
+  review?: ReviewRecord;
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,6 +141,8 @@ export interface ArticleSection {
   heading: string;
   body: string[];
   status: VerificationStatus;
+  /** Defaults to the article's review when omitted. */
+  review?: ReviewRecord;
 }
 
 export interface KnowledgeArticle {
@@ -135,8 +152,8 @@ export interface KnowledgeArticle {
   summary: string;
   equipmentIds: string[];
   status: VerificationStatus;
-  /** ISO date of the last engineer review, or null if never reviewed. */
-  lastReviewed: string | null;
+  /** The engineer's review. Required when the article is `verified`. */
+  review?: ReviewRecord;
   keywords: string[];
   sections: ArticleSection[];
 }

@@ -2,17 +2,20 @@
 
 Phases are indicative. Each phase should finish with passing automated checks and an updated `PHASE_STATUS.md`.
 
-## RT-001 — Foundation ✅ (this phase)
-Next.js app shell, Studio Explorer with zoom/pan and hotspots (illustrative layout until photos arrive), equipment panel, scripted troubleshooter, validated workspace commands, Knowledge Centre, read-only Administration, documentation and tests.
+## RT-001 — Foundation ✅
+Next.js app shell, Studio Explorer, equipment panel, scripted troubleshooter, validated workspace commands, Knowledge Centre, read-only Administration, documentation and tests.
 
-## RT-002 — Real studio photographs
-- Add the ten photographs to `public/studio/photos/` (optimised, EXIF location data stripped).
-- Create a `StudioView` record per photograph and place real hotspots (one equipment record may appear in several photos).
-- Build a development-only hotspot placement helper (click-and-drag to output fractional coordinates) to speed this up.
-- Walk through the photos with the station engineer: confirm equipment identities and fill in `requiresVerification` answers.
-- Remove the illustrative layout from the default view once real photos are present (it is already only shown when no photos exist).
+## RT-002 — Stabilisation, studio photos and mobile ✅ (this phase)
+RT-QA-001 fixes (reply understanding, no accidental resets, preserved observations, support requests, silence escalation, viewer resize and keyboard, accessibility, validation), real photographs with hotspots, photo import pipeline, developer hotspot editor, session persistence, phone/tablet layouts, install foundation.
 
-## RT-003 — Verified knowledge base
+## RT-003 — Engineer review and verified knowledge
+- Walk through the photos and `EQUIPMENT.md` with the station engineer; confirm hotspot identities and answer the open questions.
+- Record confirmations as `review` records; add verified procedures only once approved.
+- Add the station's technical-support contact details (and confirm the number seen on the rack sticker).
+- Test on real iPhones and Android phones in the studio.
+- Move content from TypeScript files to a content store while keeping the same types.
+
+## RT-003b — Knowledge base expansion
 - Engineer review workflow: mark facts, sections and articles as `verified` with a review date.
 - Add verified procedures (only once approved) and the station's technical-support contact details.
 - Move content from TypeScript files to a content store (e.g. Markdown/MDX in the repo, or a small database) while keeping the same types.
@@ -30,8 +33,14 @@ Next.js app shell, Studio Explorer with zoom/pan and hotspots (illustrative layo
 - Audit trail of who verified what.
 - Deployment to an approved host, with CI running typecheck, unit tests, build and Playwright tests.
 
+## Offline strategy (planned, not built)
+- A service worker caches only the app shell and **engineer-approved emergency instructions** (e.g. what to do about silence on air), versioned so outdated instructions are replaced.
+- Conversations are never cached by the service worker; they stay in tab-scoped session storage.
+- The app must show clearly when it is offline and which instructions are cached.
+
 ## Testing strategy (ongoing)
 - Unit tests for content integrity, interpreter, engine, command validation.
 - Component tests for interactive UI.
 - Playwright end-to-end tests at desktop, tablet and phone widths.
-- Accessibility checks (axe) to be added in RT-002.
+- Accessibility checks (axe) at five widths — added in RT-002.
+- Real-device testing on iPhone and Android — pending.

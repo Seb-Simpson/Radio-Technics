@@ -30,7 +30,9 @@ The assistant explains and guides. It **never operates real broadcast equipment*
 ## Known station details
 
 - One studio with a fixed set of equipment.
-- Ten studio photographs have been collected. **None have been added to the project yet.**
+- The station is Mix 92.6 (from branding visible in the photographs).
+- Ten studio photographs have been supplied and are used in the Studio Explorer (metadata removed; a logged-in name on the Myriad screen blurred).
+- The camera is used for Zoom video calls (station reported).
 - Equipment identified so far: main broadcast mixing console; presenter and guest microphones; Myriad radio playout software; a standalone green physical button that advances Myriad to the next song; a Zoom video camera; headphone monitoring; studio monitor speakers; audio level meters; a technical equipment rack; associated studio computer equipment.
 - The green button's reported function is advancing Myriad to the next song. Its wiring, trigger mechanism and behaviour in each playout mode are **unknown**.
 
@@ -42,4 +44,4 @@ See [EQUIPMENT.md](EQUIPMENT.md) for detail and open questions.
 - No paid services or API keys in Phase 001.
 - No authentication, database or microservices yet; architecture must make these easy to add later.
 - Plain English, one question at a time, no dead ends, accessible to keyboard and screen-reader users, respects reduced motion.
-- Must remain useful on desktop and tablet; usable on phones.
+- Must work on desktop, laptop, tablet, iPhone and Android as one responsive web app (no native app yet). Installable foundation in place; offline support not yet built.

@@ -1,6 +1,8 @@
 import { getFlowNode, MAX_INPUT_LENGTH } from "@/lib/troubleshooter/engine";
 import type { AnsweredQuestion, ChatMessage, ChooseReason, ConversationState, Observation, Step } from "@/lib/troubleshooter/types";
 import { isKnownEquipmentId } from "@/lib/content/equipment";
+import { getViewById } from "@/lib/content/views";
+import { hotspots } from "@/data/hotspots";
 
 /**
  * Session persistence (RT-002 G).
@@ -20,6 +22,10 @@ export const SESSION_MAX_IDLE_MS = 2 * 60 * 60 * 1000;
 
 const MAX_MESSAGES = 400;
 const MAX_TEXT = 2000;
+/** Larger than any real session; anything bigger is not ours (RT-QA-002B). */
+export const MAX_STORED_CHARS = 1_000_000;
+const MAX_SEQ = 1_000_000;
+const MESSAGE_ID = /^m(\d{1,7})$/;
 
 export interface SavedWorkspace {
   selectedEquipmentId: string | null;
@@ -96,6 +102,8 @@ function parseAnswer(raw: unknown): AnsweredQuestion | null {
   if (raw.source !== "button" && raw.source !== "typed") return null;
   if (raw.certainty !== "confirmed" && raw.certainty !== "uncertain") return null;
   if (raw.typedText !== undefined && !isText(raw.typedText, MAX_INPUT_LENGTH)) return null;
+  // Typed text belongs only to typed answers.
+  if (raw.typedText !== undefined && raw.source !== "typed") return null;
   return { question: raw.question, answer: raw.answer, source: raw.source, certainty: raw.certainty, typedText: raw.typedText as string | undefined };
 }
 
@@ -116,6 +124,22 @@ function parseList<T>(raw: unknown, parse: (item: unknown) => T | null, max: num
   return out;
 }
 
+/**
+ * Validate restored workspace IDs against real content. Unknown values are
+ * dropped (the conversation itself is still usable); a hotspot is kept only
+ * if it shows the selected equipment.
+ */
+export function parseWorkspace(raw: unknown): SavedWorkspace {
+  const ws = isObject(raw) ? raw : {};
+  const selectedEquipmentId = isKnownEquipmentId(ws.selectedEquipmentId) ? ws.selectedEquipmentId : null;
+  const hotspot = typeof ws.selectedHotspotId === "string" ? hotspots.find((h) => h.id === ws.selectedHotspotId) : undefined;
+  return {
+    selectedEquipmentId,
+    selectedHotspotId: hotspot && selectedEquipmentId && hotspot.equipmentId === selectedEquipmentId ? hotspot.id : null,
+    activeViewId: typeof ws.activeViewId === "string" && getViewById(ws.activeViewId) ? ws.activeViewId : null,
+  };
+}
+
 /** Validate an untrusted conversation. Returns null if anything is wrong. */
 export function parseConversation(raw: unknown): ConversationState | null {
   if (!isObject(raw)) return null;
@@ -126,8 +150,13 @@ export function parseConversation(raw: unknown): ConversationState | null {
   if (!step || !messages || messages.length === 0 || !answers || !observations) return null;
   if (raw.equipmentId !== null && !isKnownEquipmentId(raw.equipmentId)) return null;
   if (typeof raw.urgent !== "boolean" || typeof raw.possibleSilence !== "boolean") return null;
-  if (typeof raw.seq !== "number" || !Number.isInteger(raw.seq) || raw.seq < messages.length) return null;
+  // Added in RT-002C; older sessions don't have it and are treated as unconfirmed.
+  const confirmedOffAir = raw.confirmedOffAir === undefined ? false : raw.confirmedOffAir;
+  if (typeof confirmedOffAir !== "boolean" || (confirmedOffAir && !raw.urgent)) return null;
+  if (typeof raw.seq !== "number" || !Number.isSafeInteger(raw.seq) || raw.seq < messages.length || raw.seq > MAX_SEQ) return null;
   if (new Set(messages.map((m) => m.id)).size !== messages.length) return null;
+  // IDs must look like the engine's own, and never run ahead of the counter (or new messages would collide).
+  if (!messages.every((m) => { const n = MESSAGE_ID.exec(m.id); return n !== null && Number(n[1]) <= (raw.seq as number); })) return null;
   return {
     step,
     equipmentId: raw.equipmentId as string | null,
@@ -136,6 +165,7 @@ export function parseConversation(raw: unknown): ConversationState | null {
     observations,
     urgent: raw.urgent,
     possibleSilence: raw.possibleSilence,
+    confirmedOffAir,
     seq: raw.seq,
   };
 }
@@ -182,6 +212,10 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
     return { status: "none" };
   }
   if (raw === null) return { status: "none" };
+  if (raw.length > MAX_STORED_CHARS) {
+    clearSession(storage);
+    return { status: "discarded", reason: "invalid" };
+  }
 
   const discard = (reason: "expired" | "invalid" | "outdated"): LoadResult => {
     clearSession(storage);
@@ -202,11 +236,6 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
 
   const conversation = parseConversation(data.conversation);
   if (!conversation) return discard("invalid");
-  const ws = isObject(data.workspace) ? data.workspace : {};
-  const workspace: SavedWorkspace = {
-    selectedEquipmentId: typeof ws.selectedEquipmentId === "string" ? ws.selectedEquipmentId : null,
-    selectedHotspotId: typeof ws.selectedHotspotId === "string" ? ws.selectedHotspotId : null,
-    activeViewId: typeof ws.activeViewId === "string" ? ws.activeViewId : null,
-  };
+  const workspace = parseWorkspace(data.workspace);
   return { status: "restored", session: { version: SESSION_VERSION, lastActivityAt: last, conversation, workspace } };
 }

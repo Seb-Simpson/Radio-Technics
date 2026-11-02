@@ -63,7 +63,23 @@ export interface Understanding {
   /** The user is asking whether to perform an action (restart, unplug…). */
   procedureQuestion: boolean;
   isQuestion: boolean;
+  /**
+   * RT-QA-002B: what the message says about the station being off air.
+   * `confirmed` — stated as fact ("we're off air"); `possible` — asked, hedged,
+   * uncertain or partly corrected ("are we off air?", "we might be off air").
+   * Questions, hypotheticals and denials are never `confirmed`.
+   */
+  offAir: "confirmed" | "possible" | null;
+  /** Off air was only mentioned hypothetically ("what if we go off air?"). */
+  hypotheticalOffAir: boolean;
+  /** Effective clauses stated as fact (not questions, hypotheticals or strong uncertainty). Used to match answers. */
+  assertive: string;
+  /** A statement with a subject that denies something ("it wasn't working", "they don't move"). */
+  negatedPredicate: boolean;
 }
+
+/** How a clause is put: only `assertive` clauses can record facts. */
+export type Modality = "assertive" | "hedged" | "uncertain" | "question" | "hypothetical" | "negated-belief";
 
 /* ------------------------------------------------------------------ */
 /* Normalisation                                                       */
@@ -101,7 +117,7 @@ const PRONOUN_CONTRACTIONS: [RegExp, string][] = [
 ];
 
 export function normaliseReply(text: string): string {
-  let t = text.toLowerCase().replace(/[‘’ʼ`]/g, "'").replace(/[–—]/g, ",");
+  let t = text.toLowerCase().replace(/[‘’ʼ`]/g, "'").replace(/[–—]/g, ",").replace(/\s-+\s/g, ", ");
   for (const [pattern, replacement] of PRONOUN_CONTRACTIONS) t = t.replace(pattern, replacement);
   t = t.replace(/'/g, "").replace(/[^a-z0-9 ,.;!?]+/g, " ");
   t = t.replace(/[a-z]+/g, (word) => NOT_CONTRACTIONS[word] ?? (word === "im" ? "i am" : word));
@@ -191,12 +207,29 @@ function splitUnpunctuated(clause: string): string[] {
   return parts.map((p) => p.join(" ")).filter(Boolean);
 }
 
-function splitClauses(normalised: string): string[] {
-  return normalised
-    .split(/[,.;!?]+|\s(?:but|although|though|however|and|so)\s/)
+function splitSubclauses(sentence: string): string[] {
+  return sentence
+    .split(/,+|\s(?:but|although|though|however|and|so)\s/)
     .map((c) => c.trim())
     .filter(Boolean)
     .flatMap(splitUnpunctuated);
+}
+
+function splitClauses(normalised: string): string[] {
+  return splitSubclauses(normalised.replace(/[.;!?]+/g, ","));
+}
+
+/** Clauses that close a sentence ending in "?". */
+function questionClauses(normalised: string): Set<string> {
+  const out = new Set<string>();
+  const parts = normalised.split(/([.;!?]+)/);
+  for (let i = 0; i < parts.length; i += 2) {
+    const delimiter = parts[i + 1] ?? "";
+    const subclauses = splitSubclauses(parts[i] ?? "");
+    const last = subclauses[subclauses.length - 1];
+    if (delimiter.includes("?") && last) out.add(last);
+  }
+  return out;
 }
 
 function stripFillers(clause: string): string {
@@ -205,17 +238,86 @@ function stripFillers(clause: string): string {
   return tokens.join(" ");
 }
 
-/** Returns [startIndex, strippedClause] of the last correction, or null. */
+/**
+ * Politeness that changes nothing ("sorry", "hang on a sec", "bear with me").
+ * RT-QA-002B: "We're off air, sorry" must not erase the report.
+ */
+const POLITE_ONLY = /^(sorry|so sorry|really sorry|sorry about that|sorry about this|sorry to bother you|sorry for the trouble|hang on|hang on a (sec|second|minute|moment|tick)|hold on|hold on a (sec|second|minute|moment)|one (sec|second|minute|moment)|just a (sec|second|minute|moment)|a (sec|second|minute|moment)|bear with me|wait|wait a (sec|second|minute|moment)|please|thanks|thank you|cheers|help)?$/;
+
+function isPoliteOnly(clause: string): boolean {
+  return POLITE_ONLY.test(stripFillers(clause));
+}
+
+/**
+ * The last self-correction, if it actually corrects something: the marker
+ * must be followed by content that is more than politeness. Returns the
+ * index of the marker clause and the remaining text of that clause.
+ */
 function findCorrection(clauses: string[]): { index: number; rest: string } | null {
   for (let i = clauses.length - 1; i >= 0; i--) {
     const clause = stripFillers(clauses[i]!);
     for (const marker of CORRECTION_MARKERS) {
       if (clause === marker || clause.startsWith(`${marker} `)) {
-        return { index: i, rest: clause.slice(marker.length).trim() };
+        const rest = clause.slice(marker.length).trim();
+        // Politeness only ("sorry about that", "hang on a sec"): not a correction; keep looking earlier.
+        if ([clause, ...clauses.slice(i + 1)].every(isPoliteOnly)) break;
+        return { index: i, rest };
       }
     }
   }
   return null;
+}
+
+/** The correction explicitly takes back an off-air report. */
+const OFF_AIR_RETRACTIONS = ["false alarm", "never mind", "ignore that", "ignore me", "my mistake", "we are fine", "it is fine", "all fine", "everything is fine", "still on air", "we are on air", "we are still on air", "station is fine", "on air fine", "it is playing", "it is back", "listeners can hear"];
+const ELLIPTICAL_DENIAL = /^(no )?(we|it|they|the station) (are|is|were|was) not$|^(no )?not off air$|^no it is not$|^no we are not$/;
+
+function retractsOffAir(effective: string[]): boolean {
+  return effective.some((c) => {
+    const clause = stripFillers(c);
+    if (ELLIPTICAL_DENIAL.test(clause)) return true;
+    if (hasAny(clause, OFF_AIR_RETRACTIONS, true)) return true;
+    return CLEAR_AIR_SILENCE.some((p) => findPhrase(words(clause), words(p), "negated") >= 0);
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Modality (RT-QA-002B)                                               */
+/* ------------------------------------------------------------------ */
+
+const QUESTION_START =
+  /^(are|is|was|were|am|do|does|did|has|have|had|can|could|will|would|should|shall|might|may) (we|it|they|you|i|the|there|that|this|he|she|my|our|your|anything|something|everything|nothing|anyone|someone|anybody|somebody)\b|^(what|why|how|where|who|which)\b/;
+const HYPOTHETICAL = /^(what if|if|in case|suppose|supposing|imagine|unless|in the event)\b|\b(what (should|do|would|shall) (i|we) do|what happens|what would happen) (if|when)\b|\b(if|in case) (we|it|the station|there|the)\b/;
+const UNCERTAIN_IF = /\b(not sure|unsure|wonder|know|tell|check|see|ask) (if|whether)\b/;
+const STRONG_UNCERTAIN = ["maybe", "perhaps", "possibly", "might", "may be", "may have", "could be", "could have", "not sure", "unsure", "do not know", "no idea", "can not tell", "not certain", "i wonder", "whether", "dunno", "no clue", "hard to say"];
+const NEGATED_BELIEF = /\b(do not|did not) (think|believe|reckon)\b|\b(i doubt|doubt it|doubt that|not convinced)\b/;
+const WEAK_HEDGES = ["i think", "i believe", "probably", "i guess", "i reckon", "i suppose", "seems", "seems like", "looks like", "sounds like"];
+
+function clauseModality(rawClause: string, questions: Set<string>): Modality {
+  const clause = stripStanceLead(stripFillers(rawClause));
+  if (HYPOTHETICAL.test(clause) && !UNCERTAIN_IF.test(clause)) return "hypothetical";
+  if (questions.has(rawClause) || QUESTION_START.test(clause)) return "question";
+  if (NEGATED_BELIEF.test(clause)) return "negated-belief";
+  if (hasAny(clause, STRONG_UNCERTAIN)) return "uncertain";
+  if (hasAny(clause, WEAK_HEDGES)) return "hedged";
+  return "assertive";
+}
+
+/** "yes it is…" → "it is…", so a leading answer word doesn't hide the clause's form. */
+function stripStanceLead(clause: string): string {
+  const tokens = words(clause);
+  while (tokens.length > 1 && (STANCE_WORDS.has(tokens[0]!) || FILLERS.has(tokens[0]!))) tokens.shift();
+  return tokens.join(" ");
+}
+
+const SUBJECTS = new Set(["it", "they", "that", "there", "i", "we", "he", "she", "this", "these", "those", "the", "my", "our"]);
+const PREDICATE_NEGATORS = new Set(["not", "never", "nothing", "none"]);
+
+/** "it was not working", "they do not move" — a statement with a subject that denies something. */
+function deniesPredicate(clause: string): boolean {
+  const tokens = words(stripStanceLead(stripFillers(clause)));
+  if (!SUBJECTS.has(tokens[0] ?? "")) return false;
+  return tokens.some((t) => PREDICATE_NEGATORS.has(t)) || hasPhrase(tokens.join(" "), "no longer");
 }
 
 /* ------------------------------------------------------------------ */
@@ -351,13 +453,26 @@ export function understand(rawText: string): Understanding {
   const text = rawText.trim();
   const normalised = normaliseReply(text);
   const clauses = splitClauses(normalised);
+  const questions = questionClauses(normalised);
+  const modality = new Map(clauses.map((c) => [c, clauseModality(c, questions)]));
+  const modalityOf = (c: string): Modality => modality.get(c) ?? clauseModality(c, questions);
 
   // Self-correction: the part after the last correction marker takes precedence.
+  // Politeness alone ("sorry", "hang on") is not a correction.
   const correction = findCorrection(clauses);
   const effective = correction ? [correction.rest, ...clauses.slice(correction.index + 1)].filter(Boolean) : clauses;
+  const factual = (c: string) => {
+    const m = modalityOf(c);
+    return m === "assertive" || m === "hedged";
+  };
+  // Only statements can answer a question or record an observation.
+  const stated = effective.filter((c) => {
+    const m = modalityOf(c);
+    return m !== "question" && m !== "hypothetical";
+  });
 
-  // Stance across clauses (not just the first).
-  const stances = effective.map(clauseStance).filter((s) => s !== "none");
+  // Stance across stated clauses (not just the first).
+  const stances = stated.map(clauseStance).filter((s) => s !== "none");
   let stance: Stance = "none";
   if (stances.includes("uncertain")) stance = "uncertain";
   else if (stances.includes("affirm") && stances.includes("negate")) stance = correction ? stances[stances.length - 1]! : "conflict";
@@ -365,25 +480,47 @@ export function understand(rawText: string): Understanding {
   // A corrected message with no stance after the correction has no stance of its own.
   if (correction && stances.length === 0) stance = "none";
 
-  // Observations about sound, from the effective part only.
-  const findings = effective.flatMap(audioFindings);
+  // Observations about sound: only facts count as claims. Uncertain or asked
+  // silence is a possible signal, never a recorded observation.
+  const findings = effective.filter(factual).flatMap(audioFindings);
+  const possibleFindings = effective
+    .filter((c) => ["uncertain", "question"].includes(modalityOf(c)))
+    .flatMap(audioFindings);
   const present = findings.some((f) => f.polarity === "present");
   const absent = findings.some((f) => f.polarity === "absent");
   const audioConflict = present && absent;
   const audio: AudioClaim | null = audioConflict ? null : absent ? "absent" : present ? "present" : null;
 
+  // Off air: stated as fact → confirmed; hedged, uncertain or asked → possible.
+  const offAirIn = (c: string) => hasAny(c, CLEAR_AIR_SILENCE, true);
+  let offAir: Understanding["offAir"] = null;
+  for (const c of effective.filter(offAirIn)) {
+    const m = modalityOf(c);
+    if (m === "assertive") offAir = "confirmed";
+    else if ((m === "hedged" || m === "uncertain" || m === "question") && offAir === null) offAir = "possible";
+  }
+  if (correction && offAir === null) {
+    // An off-air report before a correction survives unless the correction takes it back.
+    const before = clauses.slice(0, correction.index).filter((c) => offAirIn(c) && factual(c));
+    if (before.length > 0 && !retractsOffAir(effective)) offAir = "possible";
+  }
+  const hypotheticalOffAir = offAir === null && effective.some((c) => modalityOf(c) === "hypothetical" && offAirIn(c));
+  const clearAirSilence = offAir === "confirmed";
+
   const effectiveText = effective.join(", ");
-  const clearAirSilence = hasAny(effectiveText, CLEAR_AIR_SILENCE, true);
   const signals: Signal[] = [];
-  if (clearAirSilence || findings.some((f) => f.polarity === "absent" && f.kind === "silence")) signals.push("silence");
+  if (offAir !== null || [...findings, ...possibleFindings].some((f) => f.polarity === "absent" && f.kind === "silence")) signals.push("silence");
   if (findings.some((f) => f.polarity === "absent" && f.kind === "no-sound")) signals.push("no-sound");
   if (hasAny(effectiveText, NOT_WORKING, true)) signals.push("not-working");
-  if (hasAny(normalised, UNCERTAIN) && hasAny(normalised, ON_AIR)) signals.push("on-air-unknown");
+  if (hasAny(normalised, UNCERTAIN) && hasAny(normalised, ON_AIR) && offAir === null) signals.push("on-air-unknown");
 
   const negatedSignals: Signal[] = [];
   if (!signals.includes("silence") && findings.some((f) => f.negated && f.polarity === "present" && f.kind === "silence")) {
     negatedSignals.push("silence");
   }
+
+  const assertiveClauses = effective.filter(factual);
+  const negatedPredicate = assertiveClauses.some((c) => deniesPredicate(c) && audioFindings(c).length === 0 && !hasAny(c, UNCERTAIN));
 
   const isQuestion = /\?/.test(text) || clauses.some((c) => QUESTION_LEADS.some((lead) => stripFillers(c).startsWith(`${lead} `)));
   const procedureQuestion = clauses.some((c) => {
@@ -406,6 +543,10 @@ export function understand(rawText: string): Understanding {
     helpRequest: isHelpRequest(clauses),
     procedureQuestion,
     isQuestion,
+    offAir,
+    hypotheticalOffAir,
+    assertive: assertiveClauses.join(", "),
+    negatedPredicate,
   };
 }
 

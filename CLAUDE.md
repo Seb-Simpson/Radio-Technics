@@ -62,5 +62,7 @@ Run `npm run check` before every commit, and `npm run test:e2e` after UI changes
 - Add a test for every new flow node behaviour, command type or content rule.
 
 ## Git
-- Work on a feature branch; do not push to `main` or open PRs unless asked.
+- Work on a feature branch; never push directly to `main`.
+- The repository owner has authorised pushing feature branches and opening a pull request after each completed change. Run `npm run check` (and `npm run test:e2e` for UI changes) before pushing. Merging remains the owner's decision.
+- History was rewritten once (RT-002B) to remove an unredacted photo; if a local clone predates it, re-clone rather than merging old history back in.
 - Don't commit build output (`.next`, `test-results`).

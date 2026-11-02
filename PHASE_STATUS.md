@@ -3,17 +3,17 @@
 ## RT-002B — Independent audit remediation (RT-QA-002)
 
 **Status:** All ten RT-QA-002 findings resolved and covered by regression tests. Real-device and engineer verification remain outside this phase.
-**Branch:** `claude/rt-002b-audit-fixes` (from `claude/rt-002-stabilisation` at audited commit `a5773d5`). Not merged, not deployed.
+**Branch:** `claude/rt-002b-audit-fixes` (from `claude/rt-002-stabilisation` at the audited commit, `a5773d5` before the history rewrite, now `f18cdd0`). Not merged, not deployed.
 
 ### Commits
 | Commit | Finding(s) |
 | --- | --- |
-| `ce37eb2` | P1 — question-aware replies, urgency before routing, human-support recognition |
-| `ca19688` | P2 — rack photo phone number redacted |
-| `0b0a1c2` | P3 — idle expiry enforced in an open tab |
-| `e298212` | P4 — focus never obscured; short desktop heights |
-| `d9c4e6b` | P5 — early image failures, per-hotspot identity, meaningful provenance |
-| `0e81a0b` | Content: Myriad 6 live-assist mode recorded as station-reported |
+| `48c0876` | P1 — question-aware replies, urgency before routing, human-support recognition |
+| `faffe85` | P2 — rack photo phone number redacted |
+| `8a475b5` | P3 — idle expiry enforced in an open tab |
+| `b469584` | P4 — focus never obscured; short desktop heights |
+| `5a38857` | P5 — early image failures, per-hotspot identity, meaningful provenance |
+| `f7434eb` | Content: Myriad 6 live-assist mode recorded as station-reported |
 | (docs commit) | Documentation |
 
 ### Findings, causes and fixes (each reproduced before fixing)
@@ -31,7 +31,9 @@
 | 10 | "TBC"/"n/a" accepted as review sources | Source only length-checked | Placeholder rejection and minimum content for sources and reviewers, including station-reported sources; admin page states validation cannot prove genuine approval |
 
 ### Privacy note
-The app has **not** been deployed. However, the unredacted rack photo remains in Git history (commits `825f01b`–`a5773d5` on `claude/rt-002-stabilisation`, pushed to GitHub and referenced by PR #2). Removing it requires rewriting history and force-pushing, which has not been done without authorisation. If the repository is public, consider making it private or authorising a history rewrite, and ask the station whether the number matters.
+The app has **not** been deployed. With the owner's authorisation, Git history was rewritten so that every commit on `main`, `claude/rt-002-stabilisation` and `claude/rt-002b-audit-fixes` contains only the redacted rack photo; the unredacted image is no longer reachable from any branch. Only commits from the first photo commit onwards were rewritten (earlier commits, including GitHub-signed ones, keep their hashes); GitHub's signature on the PR #2 merge commit could not be preserved.
+
+Remaining exposure outside our control: GitHub keeps pull-request refs (`refs/pull/2/head`) and may cache old commits until garbage collection; anyone who cloned or fetched before the rewrite still has the old image. Full removal from GitHub's servers requires a request to GitHub Support. A pre-rewrite backup bundle was kept only in the session scratchpad, not in the repository.
 
 ### Automated results (final commit, all run)
 | Check | Result |
@@ -82,10 +84,10 @@ Manual checks:
 | `ea659ce` | fix | B1–B2: viewer resize constraints, keyboard activation after drag |
 | `dd0d7b2` | fix | E: contrast, chat/article semantics, focus order, target size, axe suite |
 | `c3241d2` | content | C2: camera is for Zoom calls; unverified observations from photos |
-| `825f01b` | feat | C/C1: ten real photographs, import pipeline, hotspots, hotspot editor |
-| `9afc984` | fix | F: stricter content validation, review records for verified content |
-| `d1c5816` | feat | G: session persistence with validation, expiry and End session |
-| `e3997a1` | feat | D: phone/tablet layouts, touch viewer, bottom sheet, manifest |
+| `15018cc` | feat | C/C1: ten real photographs, import pipeline, hotspots, hotspot editor |
+| `b56ae25` | fix | F: stricter content validation, review records for verified content |
+| `6ad812c` | feat | G: session persistence with validation, expiry and End session |
+| `bd4deed` | feat | D: phone/tablet layouts, touch viewer, bottom sheet, manifest |
 | (docs commit) | docs | Documentation for RT-002 |
 
 ### RT-QA-001 findings: before and after

@@ -1,30 +1,48 @@
 import { flowNodes, troubleshootingTopics } from "@/data/troubleshooting-flows";
 import { getAllEquipment, getEquipmentById, isKnownEquipmentId } from "@/lib/content/equipment";
 import { showEquipmentCommands, type WorkspaceCommand } from "@/lib/workspace/commands";
-import { containsPhrase, interpret, matchEquipment } from "./interpret";
+import { interpret, matchEquipment } from "./interpret";
 import type {
+  AnsweredQuestion,
   ChatMessage,
   ChooseReason,
   ConversationState,
   EngineContext,
   EngineResult,
   FlowNode,
+  FlowOption,
   Step,
   StepOption,
   StepView,
   UserInput,
 } from "./types";
+import { hasPhrase, isContradictory, normaliseReply, understand, type Understanding } from "./understand";
 
 /**
- * Deterministic troubleshooting engine for the RT-001 prototype.
+ * Deterministic troubleshooting engine (prototype — not AI).
  *
  * Pure functions only: (state, input, context) → (new state, UI commands).
  * Nothing here talks to a network, an AI model or studio hardware.
+ *
+ * Safety properties (all covered by tests):
+ * - Typed text can never reset a conversation; only the explicit "restart"
+ *   option can, and the UI confirms that first.
+ * - Requests for a person always go to the support step.
+ * - Clear reports of on-air silence go straight to the urgent outcome;
+ *   possible silence gets one short clarifying question.
+ * - A typed reply is only mapped to an answer whose meaning agrees with
+ *   what the user said. Contradictions and low confidence lead to a
+ *   clarifying question, never a guess.
+ * - Everything the user types is kept verbatim for the support summary.
  */
 
 const nodesById = new Map(flowNodes.map((node) => [node.id, node]));
 const FALLBACK_ENTRY_NODE = "generic-symptom";
-const MAX_INPUT_LENGTH = 500;
+export const MAX_INPUT_LENGTH = 500;
+const URGENT_NODE = "outcome-urgent";
+const ON_AIR_CHECK_NODE = "hear-on-air";
+const HEARING_NODE = "hear-where";
+const HEARING_NODES = new Set(["hear-where", "hear-headphones", "hear-speakers", "hear-on-air", "hear-meters", "mic-headphones"]);
 
 export const UNIVERSAL_OPTIONS: StepOption[] = [
   { id: "u-unsure", label: "I'm not sure", kind: "universal" },
@@ -36,17 +54,17 @@ const RESTART_OPTION: StepOption = { id: "restart", label: "Start a new problem"
 const SUPPORT_OPTION = UNIVERSAL_OPTIONS[2]!;
 const SHOW_OPTION = UNIVERSAL_OPTIONS[1]!;
 
-const UNIVERSAL_MATCHES: Record<string, string[]> = {
-  "u-unsure": ["not sure", "i'm not sure", "im not sure", "unsure", "don't know", "dont know", "i don't know", "no idea", "dunno"],
-  "u-show": ["show me", "show me where", "where is it", "where is that", "where's that"],
-  "u-support": ["technical support", "tech support", "support", "engineer", "call an engineer", "get help"],
-};
-const RESTART_MATCHES = ["start again", "start over", "restart", "new problem", "reset"];
-const YES_MATCHES = ["yes", "yeah", "yep", "y", "correct", "that's right", "thats right", "that's it", "that one"];
-const NO_MATCHES = ["no", "nope", "n", "not that", "something else", "wrong one"];
+const SHOW_ME_PHRASES = ["show me", "show me where", "where is it", "where is that", "where is the"];
+const RESTART_WORDS = ["start again", "start over", "restart", "reset", "new problem", "clear", "clear chat"];
 
 export const GREETING =
-  "Hello. Tell me what's wrong in your own words — for example “the green button isn't working” — or choose a common problem below.";
+  "Hello. Tell me what's wrong in your own words \u2014 for example \u201cthe green button isn't working\u201d \u2014 or choose a common problem below.";
+
+export const SUPPORT_PROMPT =
+  "Please contact the station's technical support. Their contact details have not been configured in Radio Technics yet \u2014 the station needs to provide them. You can read out or copy the summary below.";
+
+const PROCEDURE_REPLY =
+  "Radio Technics doesn't have any engineer-approved instructions for that yet, so please don't restart, unplug or reset equipment unless technical support tells you to. I've noted your question for them.";
 
 /* ------------------------------------------------------------------ */
 /* State helpers                                                       */
@@ -145,8 +163,7 @@ export function describeStep(state: ConversationState): StepView {
     case "support":
       return {
         kind: "support",
-        prompt:
-          "Please contact the station's technical support. Their contact details haven't been added to Radio Technics yet — the station needs to provide them. You can read out or copy the summary below.",
+        prompt: SUPPORT_PROMPT,
         options: [
           { id: "back", label: "Go back to my last question", kind: "back" },
           RESTART_OPTION,
@@ -157,14 +174,10 @@ export function describeStep(state: ConversationState): StepView {
 }
 
 function enterStep(state: ConversationState, step: Step): ConversationState {
-  const next = { ...state, step };
+  const node = step.kind === "node" ? nodesById.get(step.nodeId) : undefined;
+  const next = { ...state, step, urgent: state.urgent || Boolean(node?.urgent) };
   const view = describeStep(next);
   return addMessage(next, { role: "assistant", text: view.prompt, help: view.help, urgent: view.urgent });
-}
-
-function recordAnswer(state: ConversationState, answer: string): ConversationState {
-  const question = describeStep(state).prompt;
-  return { ...state, answers: [...state.answers, { question, answer }] };
 }
 
 function allEquipmentIds(): string[] {
@@ -184,7 +197,15 @@ function beginEquipmentFlow(state: ConversationState, equipmentId: string, comma
 /* ------------------------------------------------------------------ */
 
 export function createConversation(): ConversationState {
-  const base: ConversationState = { step: { kind: "start" }, equipmentId: null, messages: [], answers: [], seq: 0 };
+  const base: ConversationState = {
+    step: { kind: "start" },
+    equipmentId: null,
+    messages: [],
+    answers: [],
+    observations: [],
+    urgent: false,
+    seq: 0,
+  };
   return addMessage(base, { role: "assistant", text: GREETING });
 }
 
@@ -196,58 +217,91 @@ export function respond(state: ConversationState, input: UserInput, context: Eng
       return handleText(state, input.text, context);
     case "equipment":
       return handleExplorerSelection(state, input.equipmentId);
-    case "topic": {
-      const topic = troubleshootingTopics.find((t) => t.id === input.topicId);
-      if (!topic) return { state: addMessage(state, { role: "notice", text: "That topic isn't available." }), commands: [] };
-      return handleText(state, topic.utterance, { selectedEquipmentId: null });
-    }
+    case "topic":
+      return handleTopic(state, input.topicId);
   }
 }
 
-/**
- * @param displayText What the user typed, if they answered by typing rather
- *   than pressing the option. Shown in the transcript instead of the label.
- */
-function handleOption(state: ConversationState, optionId: string, displayText?: string): EngineResult {
+/* ------------------------------------------------------------------ */
+/* Recording                                                           */
+/* ------------------------------------------------------------------ */
+
+type AnswerMeta = Pick<AnsweredQuestion, "source" | "certainty" | "typedText">;
+const BUTTON: AnswerMeta = { source: "button", certainty: "confirmed" };
+
+function recordAnswer(state: ConversationState, answer: string, meta: AnswerMeta): ConversationState {
+  const question = describeStep(state).prompt;
+  return { ...state, answers: [...state.answers, { question, answer, ...meta }] };
+}
+
+function recordObservation(state: ConversationState, text: string, inReplyTo: string | null): ConversationState {
+  return { ...state, observations: [...state.observations, { text, inReplyTo }] };
+}
+
+function say(state: ConversationState, text: string): ConversationState {
+  return addMessage(state, { role: "assistant", text });
+}
+
+function reask(state: ConversationState, preface: string): EngineResult {
+  return { state: enterStep(say(state, preface), state.step), commands: [] };
+}
+
+function goToNode(state: ConversationState, nodeId: string, commands: WorkspaceCommand[] = []): EngineResult {
+  return { state: enterStep(state, { kind: "node", nodeId }), commands };
+}
+
+function goUrgent(state: ConversationState): EngineResult {
+  return goToNode(state, URGENT_NODE);
+}
+
+function goSupport(state: ConversationState): EngineResult {
+  if (state.step.kind === "support") {
+    return { state: say(state, "Technical support contact details haven't been configured yet. When you reach them, read out or copy the summary below."), commands: [] };
+  }
+  return { state: enterStep(state, { kind: "support", returnTo: state.step }), commands: [] };
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
+
+function handleOption(state: ConversationState, optionId: string): EngineResult {
   const view = describeStep(state);
   const option = view.options.find((o) => o.id === optionId);
   if (!option) {
-    return { state: addMessage(state, { role: "notice", text: "That option isn't available any more. Please choose one of the current options." }), commands: [] };
+    return {
+      state: addMessage(state, { role: "notice", text: "That option isn't available any more. Please choose one of the current options." }),
+      commands: [],
+    };
   }
-
-  if (option.kind === "topic") {
-    return respond(state, { type: "topic", topicId: optionId.slice("topic:".length) }, { selectedEquipmentId: null });
-  }
+  if (option.kind === "topic") return handleTopic(state, optionId.slice("topic:".length));
+  // Only reachable from an explicit button; the UI asks for confirmation first.
   if (option.id === "restart") return { state: createConversation(), commands: [] };
 
-  let s = addMessage(state, { role: "user", text: displayText ?? option.label });
+  const s = addMessage(state, { role: "user", text: option.label });
+  return applyChoice(s, option, BUTTON);
+}
+
+/**
+ * Apply a chosen option. `state` already contains the user's message;
+ * `state.step` is still the step the option belongs to.
+ */
+function applyChoice(state: ConversationState, option: StepOption, meta: AnswerMeta): EngineResult {
+  const view = describeStep(state);
+  const step = state.step;
 
   switch (option.id) {
     case "u-support":
-      return { state: enterStep(s, { kind: "support", returnTo: state.step }), commands: [] };
+      return goSupport(state);
     case "back":
-      return { state: enterStep(s, state.step.kind === "support" ? state.step.returnTo : { kind: "start" }), commands: [] };
-    case "u-show": {
-      if (view.equipmentId) {
-        const record = getEquipmentById(view.equipmentId);
-        s = addMessage(s, {
-          role: "assistant",
-          text: `I've highlighted the ${record?.shortName ?? "equipment"} in the Studio Explorer.`,
-        });
-        return { state: s, commands: showEquipmentCommands(view.equipmentId) };
-      }
-      s = addMessage(s, {
-        role: "assistant",
-        text: "I've opened the Studio Explorer. Select the item you mean, then choose “Use in troubleshooter”.",
-      });
-      return { state: s, commands: [{ type: "open_studio_explorer" }] };
-    }
+      return { state: enterStep(state, step.kind === "support" ? step.returnTo : { kind: "start" }), commands: [] };
+    case "u-show":
+      return showMeWhere(state, view);
     case "u-unsure":
-      return handleUnsure(recordAnswer(s, option.label), state.step);
+      return handleUnsure(recordAnswer(state, option.label, { ...meta, certainty: "uncertain" }), step);
   }
 
-  s = recordAnswer(s, option.label);
-  const step = state.step;
+  let s = recordAnswer(state, option.label, meta);
 
   if (step.kind === "confirm") {
     if (option.id === "confirm:yes") return beginEquipmentFlow(s, step.equipmentId, []);
@@ -255,8 +309,7 @@ function handleOption(state: ConversationState, optionId: string, displayText?: 
   }
 
   if (step.kind === "choose" && option.id.startsWith("equip:")) {
-    const equipmentId = option.id.slice("equip:".length);
-    return beginEquipmentFlow(s, equipmentId, []);
+    return beginEquipmentFlow(s, option.id.slice("equip:".length), []);
   }
 
   if (step.kind === "node" && option.id.startsWith("opt:")) {
@@ -268,35 +321,39 @@ function handleOption(state: ConversationState, optionId: string, displayText?: 
         s = { ...s, equipmentId: flowOption.setEquipmentId };
         commands.push({ type: "select_equipment", equipmentId: flowOption.setEquipmentId });
       }
-      return { state: enterStep(s, { kind: "node", nodeId: flowOption.next }), commands };
+      return goToNode(s, flowOption.next, commands);
     }
   }
 
   return { state: enterStep(s, step), commands: [] };
 }
 
+function showMeWhere(state: ConversationState, view: StepView): EngineResult {
+  if (view.equipmentId) {
+    const record = getEquipmentById(view.equipmentId);
+    return {
+      state: say(state, `I've highlighted the ${record?.shortName ?? "equipment"} in the Studio Explorer.`),
+      commands: showEquipmentCommands(view.equipmentId),
+    };
+  }
+  return {
+    state: say(state, "I've opened the Studio Explorer. Select the item you mean, then choose \u201cUse in troubleshooter\u201d."),
+    commands: [{ type: "open_studio_explorer" }],
+  };
+}
+
 function handleUnsure(state: ConversationState, step: Step): EngineResult {
   switch (step.kind) {
     case "node": {
       const node = nodesById.get(step.nodeId);
-      if (node?.unsureNext) {
-        const s = addMessage(state, { role: "assistant", text: "That's fine — let's try something else." });
-        return { state: enterStep(s, { kind: "node", nodeId: node.unsureNext }), commands: [] };
-      }
-      return { state: enterStep(state, { kind: "support", returnTo: step }), commands: [] };
+      if (node?.unsureNext) return goToNode(say(state, "That's fine \u2014 let's try something else."), node.unsureNext);
+      return goSupport(state);
     }
     case "confirm":
-    case "start": {
-      const s = addMessage(state, { role: "assistant", text: "No problem." });
-      return { state: enterStep(s, { kind: "choose", equipmentIds: allEquipmentIds(), reason: "other" }), commands: [] };
-    }
-    case "choose": {
-      const s = addMessage(state, {
-        role: "assistant",
-        text: "That's okay. Choose “Show me where” to look around the studio, or ask for technical support.",
-      });
-      return { state: s, commands: [] };
-    }
+    case "start":
+      return { state: enterStep(say(state, "No problem."), { kind: "choose", equipmentIds: allEquipmentIds(), reason: "other" }), commands: [] };
+    case "choose":
+      return { state: say(state, "That's okay. Choose \u201cShow me where\u201d to look around the studio, or ask for technical support."), commands: [] };
     case "support":
       return { state, commands: [] };
   }
@@ -305,43 +362,27 @@ function handleUnsure(state: ConversationState, step: Step): EngineResult {
 function handleExplorerSelection(state: ConversationState, equipmentId: string): EngineResult {
   if (!isKnownEquipmentId(equipmentId)) {
     return {
-      state: addMessage(state, {
-        role: "notice",
-        text: "That item isn't in the studio's equipment list, so I can't use it. Please choose another item.",
-      }),
+      state: addMessage(state, { role: "notice", text: "That item isn't in the studio's equipment list, so I can't use it. Please choose another item." }),
       commands: [],
     };
   }
   const record = getEquipmentById(equipmentId)!;
   let s = addMessage(state, { role: "user", text: `I've selected the ${record.shortName} in the Studio Explorer.` });
-  s = { ...s, answers: [...s.answers, { question: "Equipment selected in Studio Explorer", answer: record.name }] };
+  s = { ...s, answers: [...s.answers, { question: "Equipment selected in Studio Explorer", answer: record.name, ...BUTTON }] };
   return beginEquipmentFlow(s, equipmentId, []);
 }
 
-function findOptionFromText(view: StepView, text: string, state: ConversationState): string | null {
-  // Exact label match.
-  const lower = text.trim().toLowerCase();
-  // Topic shortcuts are excluded: their text is handled by the interpreter.
-  const byLabel = view.options.find((o) => o.kind !== "topic" && o.label.toLowerCase() === lower);
-  if (byLabel) return byLabel.id;
-
-  if (view.options.some((o) => o.id === "confirm:yes")) {
-    if (containsPhrase(text, YES_MATCHES)) return "confirm:yes";
-    if (containsPhrase(text, NO_MATCHES)) return "confirm:no";
-  }
-
-  if (state.step.kind === "node") {
-    const node = nodesById.get(state.step.nodeId);
-    for (const option of node?.options ?? []) {
-      if (option.match && containsPhrase(text, option.match)) return `opt:${option.id}`;
-    }
-  }
-
-  for (const [id, phrases] of Object.entries(UNIVERSAL_MATCHES)) {
-    if (view.options.some((o) => o.id === id) && containsPhrase(text, phrases)) return id;
-  }
-  return null;
+function handleTopic(state: ConversationState, topicId: string): EngineResult {
+  const topic = troubleshootingTopics.find((t) => t.id === topicId);
+  if (!topic) return { state: addMessage(state, { role: "notice", text: "That topic isn't available." }), commands: [] };
+  let s = addMessage(state, { role: "user", text: topic.label });
+  s = { ...s, answers: [...s.answers, { question: "Common problem chosen", answer: topic.label, ...BUTTON }] };
+  return describeNewProblem(s, understand(topic.utterance), { selectedEquipmentId: null });
 }
+
+/* ------------------------------------------------------------------ */
+/* Typed text                                                          */
+/* ------------------------------------------------------------------ */
 
 function handleText(state: ConversationState, rawText: string, context: EngineContext): EngineResult {
   const text = rawText.trim().slice(0, MAX_INPUT_LENGTH);
@@ -349,73 +390,190 @@ function handleText(state: ConversationState, rawText: string, context: EngineCo
     return { state: addMessage(state, { role: "notice", text: "Please type a description, or choose one of the options." }), commands: [] };
   }
 
-  if (containsPhrase(text, RESTART_MATCHES)) {
-    return { state: createConversation(), commands: [] };
+  const view = describeStep(state);
+  const u = understand(text);
+
+  // The user's words are always kept, verbatim, before anything else happens.
+  let s = addMessage(state, { role: "user", text });
+  s = recordObservation(s, text, view.kind === "question" ? view.prompt : null);
+
+  // 1. A request for a person always wins over continuing the diagnosis.
+  if (u.helpRequest) return goSupport(s);
+
+  // 2. Questions such as "Should I restart the computer?" get a safe answer; nothing is reset.
+  if (u.procedureQuestion) return reask(s, PROCEDURE_REPLY);
+
+  // 3. Unambiguous on-air silence is urgent, wherever we are.
+  if (u.clearAirSilence) return goUrgent(s);
+
+  // 4. Typed "start again" never clears the conversation by itself.
+  if (RESTART_WORDS.includes(u.normalised.replace(/[.!?]+$/, ""))) {
+    return {
+      state: say(s, "To start a new problem, use the \u201cStart again\u201d button at the top of the conversation. Your answers so far are still here."),
+      commands: [],
+    };
   }
 
-  const view = describeStep(state);
-  const optionId = findOptionFromText(view, text, state);
-  if (optionId) return handleOption(state, optionId, text);
+  // 5. The user typed an option's label exactly.
+  const lower = text.toLowerCase().replace(/[.!?]+$/, "");
+  const byLabel = view.options.find((o) => o.kind !== "topic" && o.kind !== "restart" && o.label.toLowerCase() === lower);
+  if (byLabel) return applyChoice(s, byLabel, { source: "typed", certainty: "confirmed", typedText: text });
 
-  let s = addMessage(state, { role: "user", text });
+  if (view.kind === "question" && SHOW_ME_PHRASES.some((p) => hasPhrase(u.normalised, p))) return showMeWhere(s, view);
 
-  // When choosing between specific candidates, look for them first.
-  if (state.step.kind === "choose") {
-    const candidateIds = state.step.equipmentIds;
-    const candidates = getAllEquipment().filter((record) => candidateIds.includes(record.id));
+  // 6. Interpret as a reply to the current question.
+  const step = state.step;
+  if (step.kind === "node" && view.kind === "question") {
+    const node = nodesById.get(step.nodeId);
+    if (node) return replyToNode(s, node, u);
+  }
+  if (step.kind === "confirm") return replyToConfirm(s, step.equipmentId, u);
+  if (step.kind === "choose") {
+    if (u.stance === "uncertain") return applyChoice(s, UNIVERSAL_OPTIONS[0]!, typedMeta(u));
+    const candidates = getAllEquipment().filter((record) => step.equipmentIds.includes(record.id));
     const match = matchEquipment(text, candidates);
     const [only] = match.equipmentIds;
     if (match.equipmentIds.length === 1 && only) {
-      s = recordAnswer(s, text);
+      s = recordAnswer(s, getEquipmentById(only)!.name, typedMeta(u));
       return beginEquipmentFlow(s, only, []);
     }
   }
 
-  const interpretation = interpret(text);
-  const describe = (st: ConversationState) => ({ ...st, answers: [...st.answers, { question: "Problem described", answer: text }] });
+  // 7. Otherwise this is a (new) description of a problem.
+  return describeNewProblem(s, u, context);
+}
 
+function typedMeta(u: Understanding): AnswerMeta {
+  return { source: "typed", certainty: u.hedged ? "uncertain" : "confirmed", typedText: u.text };
+}
+
+const POSSIBLE_SILENCE = new Set(["silence", "no-sound"]);
+
+/** Score how well an option fits the reply. Returns null when it contradicts the user's stance. */
+function scoreOption(option: FlowOption, u: Understanding): number | null {
+  // The user explicitly denied what this option stands for ("No, it's not silent").
+  if (option.signals?.some((sig) => u.negatedSignals.includes(sig))) return null;
+  let score = 0;
+  if (option.answer) {
+    if ((u.stance === "affirm" && option.answer === "no") || (u.stance === "negate" && option.answer === "yes")) return null;
+    if ((u.stance === "affirm" && option.answer === "yes") || (u.stance === "negate" && option.answer === "no")) score += 2;
+  }
+  if (option.signals?.some((sig) => u.signals.includes(sig))) score += 3;
+  if (option.match?.some((phrase) => hasPhrase(u.normalised, normaliseReply(phrase), true))) score += 2;
+  return score;
+}
+
+function replyToNode(state: ConversationState, node: FlowNode, u: Understanding): EngineResult {
+  // Not knowing whether the station is on air is itself a reason to check for silence.
+  if (u.signals.includes("on-air-unknown") && !node.broadcastCheck) {
+    const s = recordAnswer(state, "Unsure whether the station is on air", typedMeta(u));
+    return goToNode(say(s, "Let's check that first."), ON_AIR_CHECK_NODE);
+  }
+  if (u.stance === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u));
+
+  const scored = node.options
+    .map((option) => ({ option, score: scoreOption(option, u) }))
+    .filter((entry): entry is { option: FlowOption; score: number } => entry.score !== null && entry.score >= 2)
+    .sort((a, b) => b.score - a.score);
+  const [best, second] = scored;
+
+  const bestCoversObservation = best?.option.signals?.some((sig) => POSSIBLE_SILENCE.has(sig)) ?? false;
+  if (isContradictory(u) && !bestCoversObservation) {
+    // e.g. "Yes, but there's no sound" — don't record a plain "yes".
+    if (!node.broadcastCheck) {
+      return goToNode(say(state, "You said yes, but also that there's no sound. Let me check something first."), ON_AIR_CHECK_NODE);
+    }
+    return reask(state, "You said yes, but also that there's no sound, so I want to be sure.");
+  }
+
+  if (best && (!second || second.score < best.score)) {
+    const option = describeStep(state).options.find((o) => o.id === `opt:${best.option.id}`)!;
+    return applyChoice(state, option, typedMeta(u));
+  }
+  if (best && second) return reask(state, "Sorry, I couldn't tell which answer you meant.");
+
+  // No answer fits. Possible silence still gets priority.
+  if (u.signals.includes("silence") && !node.broadcastCheck) {
+    return goToNode(say(state, "That sounds like there may be silence. Let me check that first."), ON_AIR_CHECK_NODE);
+  }
+  if (u.signals.includes("no-sound") && !HEARING_NODES.has(node.id)) {
+    return goToNode(say(state, "Let's find out where the sound is missing."), HEARING_NODE);
+  }
+  // Keep the user's place; their words are already saved for technical support.
+  return reask(state, "Thanks \u2014 I've noted that for technical support. To carry on, please choose one of the answers below.");
+}
+
+function replyToConfirm(state: ConversationState, equipmentId: string, u: Understanding): EngineResult {
+  if (u.stance === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u));
+  const options = describeStep(state).options;
+  const other = interpret(u.text);
+  if (u.stance !== "affirm" && other.kind === "equipment" && other.equipmentId !== equipmentId) {
+    // "No, it's the guest mic" — check the newly named item instead.
+    const s = recordAnswer(state, "No, something else", typedMeta(u));
+    return { state: enterStep(s, { kind: "confirm", equipmentId: other.equipmentId }), commands: [] };
+  }
+  if (u.stance === "negate") return applyChoice(state, options.find((o) => o.id === "confirm:no")!, typedMeta(u));
+  if (u.stance === "affirm") return applyChoice(state, options.find((o) => o.id === "confirm:yes")!, typedMeta(u));
+  if (u.signals.includes("silence")) return goToNode(say(state, "Let me check something first."), ON_AIR_CHECK_NODE);
+  return reask(state, "Thanks, I've noted that. Just to check which equipment you mean:");
+}
+
+function describeNewProblem(state: ConversationState, u: Understanding, context: EngineContext): EngineResult {
+  const choose = (equipmentIds: string[], reason: ChooseReason): EngineResult => ({
+    state: enterStep(state, { kind: "choose", equipmentIds, reason }),
+    commands: [],
+  });
+
+  // Possible silence is checked before anything else.
+  if (u.signals.includes("silence") || u.signals.includes("on-air-unknown")) {
+    return goToNode({ ...state, equipmentId: state.equipmentId }, ON_AIR_CHECK_NODE);
+  }
+
+  const interpretation = interpret(u.text);
   switch (interpretation.kind) {
     case "cable":
-      return { state: enterStep(describe({ ...s, equipmentId: null }), { kind: "node", nodeId: "cable-where" }), commands: [] };
+      return goToNode({ ...state, equipmentId: null }, "cable-where");
     case "hearing":
-      return { state: enterStep(describe({ ...s, equipmentId: null }), { kind: "node", nodeId: "hear-where" }), commands: [] };
+      return goToNode({ ...state, equipmentId: null }, HEARING_NODE);
     case "equipment":
-      return { state: enterStep(describe(s), { kind: "confirm", equipmentId: interpretation.equipmentId }), commands: [] };
+      return { state: enterStep(state, { kind: "confirm", equipmentId: interpretation.equipmentId }), commands: [] };
     case "ambiguous":
-      return { state: enterStep(describe(s), { kind: "choose", equipmentIds: interpretation.equipmentIds, reason: "ambiguous" }), commands: [] };
-    case "vague": {
+      return choose(interpretation.equipmentIds, "ambiguous");
+    case "vague":
       if (context.selectedEquipmentId && isKnownEquipmentId(context.selectedEquipmentId)) {
-        return { state: enterStep(describe(s), { kind: "confirm", equipmentId: context.selectedEquipmentId }), commands: [] };
+        return { state: enterStep(state, { kind: "confirm", equipmentId: context.selectedEquipmentId }), commands: [] };
       }
-      return { state: enterStep(describe(s), { kind: "choose", equipmentIds: allEquipmentIds(), reason: "vague" }), commands: [] };
-    }
-    case "unknown": {
-      const awaitingAnswer = view.kind === "question";
-      if (!awaitingAnswer) {
-        return { state: enterStep(describe(s), { kind: "choose", equipmentIds: allEquipmentIds(), reason: "unknown" }), commands: [] };
-      }
-      // Mid-question: don't lose the user's place.
-      s = addMessage(s, {
-        role: "assistant",
-        text: "Sorry, I didn't understand that. Please choose one of the options below, or describe the problem in a different way.",
-      });
-      return { state: s, commands: [] };
-    }
+      return choose(allEquipmentIds(), "vague");
+    case "unknown":
+      if (u.signals.includes("no-sound")) return goToNode(state, HEARING_NODE);
+      return choose(allEquipmentIds(), "unknown");
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Support summary                                                     */
+/* ------------------------------------------------------------------ */
 
 /** Plain-text summary a presenter can read out or copy to technical support. */
 export function buildSupportSummary(state: ConversationState): string {
   const record = getEquipmentById(state.equipmentId);
-  const lines = [
-    "Radio Technics — problem summary (prototype)",
-    `Equipment: ${record ? record.name : "not identified yet"}`,
-  ];
-  if (state.answers.length > 0) {
-    lines.push("", "What was reported:");
-    for (const { question, answer } of state.answers) lines.push(`- ${question} → ${answer}`);
-  } else {
-    lines.push("", "No details recorded yet.");
+  const lines = ["Radio Technics \u2014 problem summary (prototype, scripted)"];
+  if (state.urgent) lines.push("URGENT: possible silence on air reported");
+  lines.push(`Equipment: ${record ? record.name : "not identified yet"}`);
+
+  if (state.observations.length > 0) {
+    lines.push("", "In the presenter's own words:");
+    for (const { text } of state.observations) lines.push(`- \u201c${text}\u201d`);
   }
+
+  if (state.answers.length > 0) {
+    lines.push("", "Answers to questions:");
+    for (const a of state.answers) {
+      const notes = [a.source === "typed" ? "typed reply" : null, a.certainty === "uncertain" ? "not certain" : null].filter(Boolean);
+      lines.push(`- ${a.question} \u2192 ${a.answer}${notes.length ? ` (${notes.join(", ")})` : ""}`);
+    }
+  }
+
+  if (state.observations.length === 0 && state.answers.length === 0) lines.push("", "No details recorded yet.");
   return lines.join("\n");
 }

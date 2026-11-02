@@ -2,6 +2,7 @@
 
 import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, RotateCcw, SendHorizontal, TriangleAlert, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { ConfirmClear } from "./ConfirmClear";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { getEquipmentById } from "@/lib/content/equipment";
@@ -62,7 +63,28 @@ export function Troubleshooter() {
     }
   }, [conversation.messages.length]);
 
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const clearButtonRef = useRef<HTMLButtonElement>(null);
+  const hasContent = conversation.messages.some((m) => m.role === "user");
+
+  const requestClear = () => {
+    if (!hasContent) return;
+    setConfirmingClear(true);
+  };
+  const cancelClear = () => {
+    setConfirmingClear(false);
+    clearButtonRef.current?.focus();
+  };
+  const confirmClear = () => {
+    setConfirmingClear(false);
+    restart();
+  };
+
   const choose = (option: StepOption) => {
+    if (option.kind === "restart") {
+      requestClear();
+      return;
+    }
     focusOptionsNext.current = true;
     send({ type: "option", optionId: option.id });
   };
@@ -95,11 +117,20 @@ export function Troubleshooter() {
             </span>
             <p className="text-sm text-ink-300">Scripted responses — not a live AI</p>
           </div>
-          <button type="button" onClick={restart} className={buttonStyles({ variant: "ghost", size: "sm" })}>
+          <button
+            ref={clearButtonRef}
+            type="button"
+            onClick={requestClear}
+            disabled={!hasContent}
+            aria-expanded={confirmingClear}
+            className={buttonStyles({ variant: "ghost", size: "sm" })}
+          >
             <RotateCcw aria-hidden className="size-3.5" />
             Start again
           </button>
         </header>
+
+        {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
 
         {selected && (
           <div className="flex items-center justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2 text-[13px] sm:px-5">

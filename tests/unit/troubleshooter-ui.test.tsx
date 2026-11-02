@@ -102,4 +102,44 @@ describe("Troubleshooter UI", () => {
     expect(screen.getByRole("heading", { name: "Summary for technical support" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go back to my last question" })).toBeInTheDocument();
   });
+
+  it("asks for confirmation before clearing, and 'Keep' keeps everything", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    expect(screen.getByRole("button", { name: "Start again" })).toBeDisabled();
+    await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+    await user.click(screen.getByRole("button", { name: "Start again" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Clear this conversation?" });
+    expect(within(dialog).getByRole("button", { name: "Keep conversation" })).toHaveFocus();
+    await user.click(within(dialog).getByRole("button", { name: "Keep conversation" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(within(log()).getByText("the green thing isn't working")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Start again" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Start again" }));
+    await user.click(screen.getByRole("button", { name: "Clear conversation" }));
+    expect(within(log()).queryByText("the green thing isn't working")).not.toBeInTheDocument();
+  });
+
+  it("typing a question about restarting doesn't clear the conversation", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    const input = screen.getByLabelText("Describe the problem");
+    await user.type(input, "the green thing isn't working{Enter}");
+    await user.type(input, "Should I restart the computer?{Enter}");
+    expect(within(log()).getByText("the green thing isn't working")).toBeInTheDocument();
+    expect(within(log()).getByText(/don't restart, unplug or reset equipment/)).toBeInTheDocument();
+  });
+
+  it("the end-of-conversation restart also needs confirmation", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    await user.type(screen.getByLabelText("Describe the problem"), "dead air{Enter}");
+    await user.click(screen.getByRole("button", { name: "Start a new problem" }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(within(log()).getByText("dead air")).toBeInTheDocument();
+  });
 });

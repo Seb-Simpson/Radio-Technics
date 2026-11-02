@@ -146,4 +146,22 @@ describe("Troubleshooter UI", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(within(log()).getByText("dead air")).toBeInTheDocument();
   });
+
+  it("keeps an urgent banner visible after moving on to support", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    const input = screen.getByLabelText("Describe the problem");
+    await user.type(input, "Can someone help me? We're off air.{Enter}");
+    expect(screen.getByTestId("urgent-banner")).toHaveTextContent("Urgent: silence on air reported.");
+    await user.type(input, "I need a human{Enter}");
+    expect(screen.getByTestId("urgent-banner")).toBeInTheDocument();
+  });
+
+  it("shows possible (unconfirmed) silence differently from confirmed silence", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    await user.type(screen.getByLabelText("Describe the problem"), "Can someone help? It's gone silent{Enter}");
+    expect(screen.getByTestId("possible-silence-banner")).toBeInTheDocument();
+    expect(screen.queryByTestId("urgent-banner")).not.toBeInTheDocument();
+  });
 });

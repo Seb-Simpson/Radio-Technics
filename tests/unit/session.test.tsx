@@ -37,12 +37,12 @@ describe("session storage", () => {
   it("round-trips a conversation and workspace", () => {
     const storage = memoryStorage();
     const conversation = sampleConversation();
-    saveSession(storage, conversation, { selectedEquipmentId: "green-next-button", activeViewId: "green-button" }, NOW);
+    saveSession(storage, conversation, { selectedEquipmentId: "green-next-button", selectedHotspotId: "green-button-button", activeViewId: "green-button" }, NOW);
     const result = loadSession(storage, NOW + 1000);
     expect(result.status).toBe("restored");
     if (result.status !== "restored") return;
     expect(result.session.conversation).toEqual(conversation);
-    expect(result.session.workspace).toEqual({ selectedEquipmentId: "green-next-button", activeViewId: "green-button" });
+    expect(result.session.workspace).toEqual({ selectedEquipmentId: "green-next-button", selectedHotspotId: "green-button-button", activeViewId: "green-button" });
   });
 
   it("expires after the idle limit and deletes the data", () => {
@@ -55,8 +55,8 @@ describe("session storage", () => {
   it.each([
     ["corrupt JSON", "{not json"],
     ["a non-object", "42"],
-    ["an older version", JSON.stringify({ version: SESSION_VERSION - 1, savedAt: NOW, conversation: {} })],
-    ["a future timestamp", JSON.stringify({ version: SESSION_VERSION, savedAt: NOW + 10 * 60_000, conversation: sampleConversation(), workspace: {} })],
+    ["an older version", JSON.stringify({ version: SESSION_VERSION - 1, lastActivityAt: NOW, conversation: {} })],
+    ["a future timestamp", JSON.stringify({ version: SESSION_VERSION, lastActivityAt: NOW + 10 * 60_000, conversation: sampleConversation(), workspace: {} })],
   ])("discards %s safely", (_label, raw) => {
     const storage = memoryStorage();
     storage.setItem(SESSION_KEY, raw);
@@ -69,7 +69,7 @@ describe("session storage", () => {
     expect(loadSession(null, NOW)).toEqual({ status: "none" });
     const throwing = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("full"); }, removeItem: () => {} };
     expect(loadSession(throwing, NOW)).toEqual({ status: "none" });
-    expect(() => saveSession(throwing, sampleConversation(), { selectedEquipmentId: null, activeViewId: null })).not.toThrow();
+    expect(() => saveSession(throwing, sampleConversation(), { selectedEquipmentId: null, activeViewId: null }, NOW)).not.toThrow();
   });
 
   describe("rejects tampered or outdated conversations", () => {
@@ -100,7 +100,7 @@ describe("session storage", () => {
 describe("session restore in the app", () => {
   it("restores a conversation after a reload and says so", async () => {
     const conversation = sampleConversation();
-    saveSession(window.sessionStorage, conversation, { selectedEquipmentId: "green-next-button", activeViewId: null });
+    saveSession(window.sessionStorage, conversation, { selectedEquipmentId: "green-next-button", activeViewId: null }, Date.now());
     renderWithProviders(<Troubleshooter />);
     const log = screen.getByRole("log", { name: "Conversation" });
     expect(await within(log).findByText("The green thing isn't working")).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("session restore in the app", () => {
   });
 
   it("does not restore invalid data and does not crash", async () => {
-    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: SESSION_VERSION, savedAt: Date.now(), conversation: { step: { kind: "node", nodeId: "nope" } } }));
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: SESSION_VERSION, lastActivityAt: Date.now(), conversation: { step: { kind: "node", nodeId: "nope" } } }));
     renderWithProviders(<Troubleshooter />);
     await waitFor(() => expect(window.sessionStorage.getItem(SESSION_KEY)).toBeNull());
     expect(screen.queryByText(/has been restored/)).not.toBeInTheDocument();

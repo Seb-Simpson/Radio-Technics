@@ -62,4 +62,24 @@ describe("photo import pipeline", () => {
       expect([meta.width, meta.height], view.id).toEqual([view.width, view.height]);
     }
   });
+
+  it("redaction replaces a region with an opaque, detail-free fill", async () => {
+    const input = await noisyJpegWithGps();
+    const region = { left: 40, top: 60, width: 150, height: 30 };
+    expect(await stdDev(input, region)).toBeGreaterThan(30);
+    const { buffer } = await processPhoto(input, { redact: [{ ...region, colour: "#b8ae4c" }] });
+    // JPEG compression leaves only tiny variation; no original detail survives.
+    expect(await stdDev(buffer, { left: 44, top: 64, width: 142, height: 22 })).toBeLessThan(3);
+    await expect(processPhoto(input, { redact: [{ ...region, colour: "red" }] })).rejects.toThrow(/colour/);
+    await expect(processPhoto(input, { redact: [{ left: 390, top: 0, width: 50, height: 5 }] })).rejects.toThrow(/outside/);
+  });
+
+  it("RT-QA-002: the phone number on the equipment-rack sticker is unreadable in the served photo", async () => {
+    // The only served version of this photo (thumbnails use the same file).
+    const file = "public/studio/photos/equipment-rack.jpg";
+    const meta = await sharp(file).metadata();
+    expect([meta.width, meta.height]).toEqual([1600, 1200]);
+    // The sticker text sat at roughly x 640–752, y 657–669 at full resolution.
+    expect(await stdDev(await sharp(file).toBuffer(), { left: 626, top: 655, width: 134, height: 16 })).toBeLessThan(3);
+  });
 });

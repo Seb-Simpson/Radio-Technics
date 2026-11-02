@@ -39,6 +39,11 @@ export default function AdminPage() {
         <h2 id="integrity-title" className="text-sm font-semibold text-ink-100">
           Content integrity
         </h2>
+        <p className="mt-1 text-[13px] leading-relaxed text-ink-300">
+          These checks confirm that records link together and that anything marked verified has a complete review record (named
+          reviewer, real date, meaningful source). They cannot prove that an engineer genuinely approved it — review records should
+          be checked with the station.
+        </p>
         {issues.length === 0 ? (
           <p className="mt-2 flex items-center gap-2 text-sm text-signal-300">
             <CircleCheck aria-hidden className="size-4" />

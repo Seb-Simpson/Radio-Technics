@@ -1,7 +1,7 @@
 "use client";
 
 import { ImageOff, Minus, Plus, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { getEquipmentById } from "@/lib/content/equipment";
 import { cn } from "@/lib/cn";
 import type { Hotspot, HotspotRegion, StudioView } from "@/types";
@@ -99,25 +99,36 @@ export interface PhotoViewerProps {
   view: StudioView;
   hotspots: Hotspot[];
   selectedEquipmentId: string | null;
+  /** When set, only this hotspot shows as selected (others for the same equipment don't). */
+  selectedHotspotId?: string | null;
   highlightedEquipmentId: string | null;
-  onSelectEquipment: (equipmentId: string) => void;
+  onSelectEquipment: (equipmentId: string, hotspotId: string) => void;
   focusRequest?: { equipmentId: string; token: number } | null;
   className?: string;
+  /**
+   * Called after a focused hotspot has been panned into view inside the
+   * viewer, so the page can also keep it clear of overlays (header, sheet).
+   */
+  onHotspotFocusVisible?: (element: HTMLElement) => void;
 }
 
 export function PhotoViewer({
   view,
   hotspots,
   selectedEquipmentId,
+  selectedHotspotId = null,
   highlightedEquipmentId,
   onSelectEquipment,
   focusRequest,
   className,
+  onHotspotFocusVisible,
 }: PhotoViewerProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 });
   const [transform, setTransform] = useState<Transform>(IDENTITY);
   const [interacting, setInteracting] = useState(false);
+  /** Pans made to reveal keyboard focus happen instantly, so positions are final immediately. */
+  const [instant, setInstant] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
 
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -162,11 +173,16 @@ export function PhotoViewer({
     return () => observer.disconnect();
   }, []);
 
-  // Reset zoom and error state when switching views.
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  // Reset zoom and error state when switching views. A photo can fail BEFORE
+  // React attaches onError (e.g. an immediate 404 during page load), so also
+  // check whether the image has already finished without any pixels.
   useEffect(() => {
     setTransform(IDENTITY);
-    setImageFailed(false);
     handledFocusToken.current = null;
+    const img = imageRef.current;
+    setImageFailed(Boolean(img && img.getAttribute("src") && img.complete && img.naturalWidth === 0));
   }, [view.id]);
 
   const update = useCallback(
@@ -185,12 +201,28 @@ export function PhotoViewer({
   }, [focusRequest, hotspots, stage, update]);
 
   const zoomBy = useCallback(
-    (factor: number, point = { x: 0, y: 0 }) =>
-      setTransform((t) => clampTransform(zoomAround(t, t.scale * factor, point), stage, viewport)),
+    (factor: number, point = { x: 0, y: 0 }) => {
+      setInstant(false);
+      setTransform((t) => clampTransform(zoomAround(t, t.scale * factor, point), stage, viewport));
+    },
     [stage, viewport],
   );
 
-  const reset = () => setTransform(IDENTITY);
+  const reset = () => {
+    setInstant(false);
+    setTransform(IDENTITY);
+  };
+
+  // Keyboard focus must never land on a hotspot that is panned out of view (WCAG 2.4.11).
+  const revealHotspot = (hotspot: Hotspot, element: HTMLElement) => {
+    const next = keepRegionVisible(hotspot.region, clampTransform(transform, stage, viewport), stage, viewport);
+    if (next.x !== transform.x || next.y !== transform.y) {
+      setInstant(true);
+      setTransform(next);
+    }
+    // Let React apply the pan, then let the page account for overlays.
+    requestAnimationFrame(() => requestAnimationFrame(() => onHotspotFocusVisible?.(element)));
+  };
 
   const relativeToCentre = useCallback((clientX: number, clientY: number) => {
     const rect = viewportRef.current?.getBoundingClientRect();
@@ -232,6 +264,7 @@ export function PhotoViewer({
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    setInstant(false);
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (pointers.current.size === 0) {
       suppressClick.current = false;
@@ -330,7 +363,14 @@ export function PhotoViewer({
   const zoomPercent = Math.round(transform.scale * 100);
 
   return (
-    <div className={cn("relative overflow-hidden rounded-xl border border-ink-750 bg-ink-950", className)}>
+    <div
+      className={cn("relative overflow-hidden rounded-xl border border-ink-750 bg-ink-950", className)}
+      // Browsers scroll overflow-hidden boxes to show a focused child; positioning is ours, so undo that.
+      onScroll={(event) => {
+        event.currentTarget.scrollTop = 0;
+        event.currentTarget.scrollLeft = 0;
+      }}
+    >
       <div
         ref={viewportRef}
         role="group"
@@ -354,7 +394,7 @@ export function PhotoViewer({
           data-testid="viewer-stage"
           className={cn(
             "relative shrink-0 origin-center will-change-transform",
-            !interacting && "transition-transform duration-300 ease-(--ease-out-quart) motion-reduce:transition-none",
+            !interacting && !instant && "transition-transform duration-300 ease-(--ease-out-quart) motion-reduce:transition-none",
           )}
           style={
             {
@@ -368,6 +408,8 @@ export function PhotoViewer({
           {view.kind === "photo" && view.src && !imageFailed ? (
             // eslint-disable-next-line @next/next/no-img-element -- transforms are applied manually
             <img
+              ref={imageRef}
+              key={view.id}
               src={view.src}
               alt={view.alt}
               draggable={false}
@@ -383,13 +425,14 @@ export function PhotoViewer({
               <HotspotButton
                 key={hotspot.id}
                 hotspot={hotspot}
-                selected={hotspot.equipmentId === selectedEquipmentId}
+                selected={selectedHotspotId ? hotspot.id === selectedHotspotId : hotspot.equipmentId === selectedEquipmentId}
                 highlighted={hotspot.equipmentId === highlightedEquipmentId}
+                onFocus={(event) => revealHotspot(hotspot, event.currentTarget)}
                 onActivate={(event) => {
                   // detail === 0: activated by keyboard (Enter/Space), never a drag.
                   if (suppressClick.current && event.detail !== 0) return;
                   suppressClick.current = false;
-                  onSelectEquipment(hotspot.equipmentId);
+                  onSelectEquipment(hotspot.equipmentId, hotspot.id);
                 }}
               />
             ))}
@@ -463,11 +506,13 @@ function HotspotButton({
   selected,
   highlighted,
   onActivate,
+  onFocus,
 }: {
   hotspot: Hotspot;
   selected: boolean;
   highlighted: boolean;
   onActivate: (event: MouseEvent<HTMLButtonElement>) => void;
+  onFocus?: (event: FocusEvent<HTMLButtonElement>) => void;
 }) {
   const record = getEquipmentById(hotspot.equipmentId);
   if (!record) return null; // Unknown references are never rendered.
@@ -481,6 +526,7 @@ function HotspotButton({
       aria-pressed={selected}
       aria-label={`${record.name}${hotspot.placeholder ? " (placeholder position)" : ""}`}
       onClick={onActivate}
+      onFocus={onFocus}
       // Positioned by its centre so small items can grow to a minimum target size
       // (--hit, in screen pixels) without shifting off the equipment.
       style={{

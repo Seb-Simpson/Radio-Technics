@@ -1,5 +1,77 @@
 # Phase Status
 
+## RT-002B — Independent audit remediation (RT-QA-002)
+
+**Status:** All ten RT-QA-002 findings resolved and covered by regression tests. Real-device and engineer verification remain outside this phase.
+**Branch:** `claude/rt-002b-audit-fixes` (from `claude/rt-002-stabilisation` at the audited commit, `a5773d5` before the history rewrite, now `f18cdd0`). Not merged, not deployed.
+
+### Commits
+| Commit | Finding(s) |
+| --- | --- |
+| `48c0876` | P1 — question-aware replies, urgency before routing, human-support recognition |
+| `faffe85` | P2 — rack photo phone number redacted |
+| `8a475b5` | P3 — idle expiry enforced in an open tab |
+| `b469584` | P4 — focus never obscured; short desktop heights |
+| `5a38857` | P5 — early image failures, per-hotspot identity, meaningful provenance |
+| `f7434eb` | Content: Myriad 6 live-assist mode recorded as station-reported |
+| (docs commit) | Documentation |
+
+### Findings, causes and fixes (each reproduced before fixing)
+| # | Finding | Underlying cause | Resolution |
+| --- | --- | --- | --- |
+| 1 | "No, there is no sound" recorded as sound present; "Yes, no, sorry it is not playing" recorded as still playing | Stance came only from the first clause and was matched to an option's yes/no label without checking what that option asserts; corrections ignored | Clause splitting (incl. unpunctuated "yes no"), self-correction markers, stance across clauses with explicit conflict, claims about sound with negation. Options declare `answer` + `audio`; a reply selects an option only if consistent with both, otherwise the question is asked again and nothing is recorded |
+| 2 | "Can someone help me? We're off air." lost urgency; "Should I restart the computer? We're off air." missed the emergency | Help/procedure routing ran before silence was checked | Safety classified first and attached to the session (`urgent` / `possibleSilence`); confirmed off-air → urgent state even with a help or procedure request (both still answered); possible silence → summary flag, banner and on-air question |
+| 3 | Natural help requests missed; "The engineer fixed the desk" triggered support | Keyword match on "engineer"/"support" | Request form + person/support target, with declines and assistant-directed "can you help…" excluded |
+| 4 | Phone number legible on the rack photo | Import removed metadata only | Opaque redaction re-imported from the original; verified flat at full served resolution (pixel deviation 1.0 vs 60.0 before) |
+| 5 | Open tab never expired; messages renewed it | Expiry only checked on load; saves stamped "now" | Activity clock updated only by user actions; expiry enforced before input, every 30 s and on focus; expired data cleared and the new message not processed; injectable `clock` |
+| 6 | Focus hidden under the sheet / outside a zoomed viewer | Nothing revealed focused hotspots or accounted for overlays | Viewer pans focused hotspots into view; page keeps focus clear of the sticky header and sheet; sheet focus continuity, Escape/Close return focus, no trap |
+| 7 | Chat input clipped at 1440×500 | Fixed viewport-based height with clipping on all wide screens | Fixed-height layout only on screens ≥720px tall (`tall:`); otherwise content flows. Height offset corrected for 1440×900 |
+| 8 | Immediate 404 left a broken image with live hotspots | `onError` attached after hydration; early errors missed | Mount/view-change check for an already-failed image, plus `onError` |
+| 9 | Different rack hotspots showed the same note and all highlighted | Selection tracked equipment only | Separate, validated `selectedHotspotId`; only the chosen region is selected and its own note is shown |
+| 10 | "TBC"/"n/a" accepted as review sources | Source only length-checked | Placeholder rejection and minimum content for sources and reviewers, including station-reported sources; admin page states validation cannot prove genuine approval |
+
+### Privacy note
+The app has **not** been deployed. With the owner's authorisation, Git history was rewritten so that every commit on `main`, `claude/rt-002-stabilisation` and `claude/rt-002b-audit-fixes` contains only the redacted rack photo; the unredacted image is no longer reachable from any branch. Only commits from the first photo commit onwards were rewritten (earlier commits, including GitHub-signed ones, keep their hashes); GitHub's signature on the PR #2 merge commit could not be preserved.
+
+Remaining exposure outside our control: GitHub keeps pull-request refs (`refs/pull/2/head`) and may cache old commits until garbage collection; anyone who cloned or fetched before the rewrite still has the old image. Full removal from GitHub's servers requires a request to GitHub Support. A pre-rewrite backup bundle was kept only in the session scratchpad, not in the repository.
+
+### Automated results (final commit, all run)
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | Pass |
+| `npm test` | **320 / 320** tests, **15 / 15** files |
+| `npm run build` | Pass |
+| `npm run test:e2e` (incl. axe) | **183 passed, 57 skipped by design** (240 total; skips are tests that set their own viewport or are touch/desktop specific) |
+
+Sizes covered: 320, 375, 390, 820, 1440 px; 1440×500, 1440×495, 1440×900; browser zoom 200% and 400% emulated as 720×450 and 360×225 CSS px. Accessibility (axe WCAG 2.0–2.2 A/AA) runs on every page at five widths.
+
+**Not done / manual only:** no physical iPhone/Android testing; browser zoom was emulated by CSS viewport size rather than the browser's zoom control; no screen-reader testing with VoiceOver/NVDA.
+
+### Re-audit instructions (RT-QA-002 repeat)
+```bash
+git fetch origin claude/rt-002b-audit-fixes && git checkout claude/rt-002b-audit-fixes
+npm ci
+npm run check
+# stop anything on :3100 first
+npm run test:e2e
+```
+Key test files: `tests/unit/rt-qa-002-conversation.test.ts`, `tests/unit/session-expiry.test.tsx`, `tests/unit/rt-qa-002-studio.test.tsx`, `tests/unit/photo-pipeline.test.ts`, `tests/e2e/focus-layout.spec.ts`, `tests/e2e/studio-regressions.spec.ts`, `tests/e2e/session.spec.ts`.
+
+Manual checks:
+1. Troubleshooter: "The green thing isn't working" → *Yes, that's it* → *Nothing changed*, then try "No, there is no sound", "Yes, no, sorry it is not playing", "yes it is. actually no, it stopped" (→ urgent) and "Yes, but there's no sound" (→ asks again, nothing recorded). Use *I can't hear anything* → *Listeners say…* to reach the on-air question and try "No, there is no sound" (→ asks again).
+2. From any step: "Can someone help me? We're off air." and "Should I restart the computer? We're off air." → urgent state and red banner; then "I need a human" → support stays urgent.
+3. Help: "I need a human", "Can I get a person?" → support; "The engineer fixed the desk last week" → not support.
+4. Open `/studio/photos/equipment-rack.jpg` at full size: the yellow sticker is a blank block.
+5. Expiry: in DevTools, run the app, send a message, then override `Date.now` to +2h01m (or wait for the Playwright clock test) → conversation cleared, notice shown, message not sent.
+6. 375px, select *Audio level meters*, Tab through hotspots: none hidden under the sheet; Escape closes and returns focus.
+7. 1440×500: the chat input is reachable and usable.
+8. Block `mixing-console.jpg` (DevTools request blocking) and reload `/studio`: fallback message, no hotspots.
+9. Equipment rack: each of the three regions shows its own note and only it is highlighted.
+10. In `src/data/equipment.ts` mark a fact `verified` with `review.source: "TBC"` → `npm test` fails.
+
+---
+
+
 ## RT-002 — Reliability, studio integration and mobile foundation
 
 **Status:** Complete for this phase. Engineer verification and real-device testing are outstanding (they need the station).
@@ -12,10 +84,10 @@
 | `ea659ce` | fix | B1–B2: viewer resize constraints, keyboard activation after drag |
 | `dd0d7b2` | fix | E: contrast, chat/article semantics, focus order, target size, axe suite |
 | `c3241d2` | content | C2: camera is for Zoom calls; unverified observations from photos |
-| `825f01b` | feat | C/C1: ten real photographs, import pipeline, hotspots, hotspot editor |
-| `9afc984` | fix | F: stricter content validation, review records for verified content |
-| `d1c5816` | feat | G: session persistence with validation, expiry and End session |
-| `e3997a1` | feat | D: phone/tablet layouts, touch viewer, bottom sheet, manifest |
+| `15018cc` | feat | C/C1: ten real photographs, import pipeline, hotspots, hotspot editor |
+| `b56ae25` | fix | F: stricter content validation, review records for verified content |
+| `6ad812c` | feat | G: session persistence with validation, expiry and End session |
+| `bd4deed` | feat | D: phone/tablet layouts, touch viewer, bottom sheet, manifest |
 | (docs commit) | docs | Documentation for RT-002 |
 
 ### RT-QA-001 findings: before and after

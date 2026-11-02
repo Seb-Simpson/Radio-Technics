@@ -8,12 +8,14 @@ import { isKnownEquipmentId } from "@/lib/content/equipment";
  * Radio Technics may run on shared studio computers, so a conversation is
  * kept only:
  *   - in sessionStorage (cleared when the browser tab closes), and
- *   - for SESSION_MAX_IDLE_MS since the last change.
+ *   - for SESSION_MAX_IDLE_MS since the last USER activity. The time saved is
+ *     the last activity time supplied by the caller, never "now", so saves
+ *     caused by background renders cannot extend a session.
  * Restored data is fully validated; anything malformed, from another
  * version, or referring to unknown content is discarded rather than used.
  */
 export const SESSION_KEY = "radio-technics.session";
-export const SESSION_VERSION = 2;
+export const SESSION_VERSION = 3;
 export const SESSION_MAX_IDLE_MS = 2 * 60 * 60 * 1000;
 
 const MAX_MESSAGES = 400;
@@ -21,12 +23,14 @@ const MAX_TEXT = 2000;
 
 export interface SavedWorkspace {
   selectedEquipmentId: string | null;
+  selectedHotspotId?: string | null;
   activeViewId: string | null;
 }
 
 export interface SavedSession {
   version: typeof SESSION_VERSION;
-  savedAt: number;
+  /** When the user last did something (ms since epoch). */
+  lastActivityAt: number;
   conversation: ConversationState;
   workspace: SavedWorkspace;
 }
@@ -121,19 +125,33 @@ export function parseConversation(raw: unknown): ConversationState | null {
   const observations = parseList(raw.observations, parseObservation, MAX_MESSAGES);
   if (!step || !messages || messages.length === 0 || !answers || !observations) return null;
   if (raw.equipmentId !== null && !isKnownEquipmentId(raw.equipmentId)) return null;
-  if (typeof raw.urgent !== "boolean") return null;
+  if (typeof raw.urgent !== "boolean" || typeof raw.possibleSilence !== "boolean") return null;
   if (typeof raw.seq !== "number" || !Number.isInteger(raw.seq) || raw.seq < messages.length) return null;
   if (new Set(messages.map((m) => m.id)).size !== messages.length) return null;
-  return { step, equipmentId: raw.equipmentId as string | null, messages, answers, observations, urgent: raw.urgent, seq: raw.seq };
+  return {
+    step,
+    equipmentId: raw.equipmentId as string | null,
+    messages,
+    answers,
+    observations,
+    urgent: raw.urgent,
+    possibleSilence: raw.possibleSilence,
+    seq: raw.seq,
+  };
 }
 
 /* ------------------------------------------------------------------ */
 /* Load / save / clear                                                 */
 /* ------------------------------------------------------------------ */
 
-export function saveSession(storage: StorageLike | null, conversation: ConversationState, workspace: SavedWorkspace, now = Date.now()): void {
-  if (!storage) return;
-  const data: SavedSession = { version: SESSION_VERSION, savedAt: now, conversation, workspace };
+/** True when more than the idle limit has passed since the last user activity. */
+export function isSessionExpired(lastActivityAt: number, now: number): boolean {
+  return now - lastActivityAt > SESSION_MAX_IDLE_MS;
+}
+
+export function saveSession(storage: StorageLike | null, conversation: ConversationState, workspace: SavedWorkspace, lastActivityAt: number): void {
+  if (!storage || !Number.isFinite(lastActivityAt)) return;
+  const data: SavedSession = { version: SESSION_VERSION, lastActivityAt, conversation, workspace };
   try {
     storage.setItem(SESSION_KEY, JSON.stringify(data));
   } catch {
@@ -178,15 +196,17 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
   }
   if (!isObject(data)) return discard("invalid");
   if (data.version !== SESSION_VERSION) return discard("outdated");
-  if (typeof data.savedAt !== "number" || !Number.isFinite(data.savedAt) || data.savedAt > now + 60_000) return discard("invalid");
-  if (now - data.savedAt > SESSION_MAX_IDLE_MS) return discard("expired");
+  const last = data.lastActivityAt;
+  if (typeof last !== "number" || !Number.isFinite(last) || last > now + 60_000) return discard("invalid");
+  if (isSessionExpired(last, now)) return discard("expired");
 
   const conversation = parseConversation(data.conversation);
   if (!conversation) return discard("invalid");
   const ws = isObject(data.workspace) ? data.workspace : {};
   const workspace: SavedWorkspace = {
     selectedEquipmentId: typeof ws.selectedEquipmentId === "string" ? ws.selectedEquipmentId : null,
+    selectedHotspotId: typeof ws.selectedHotspotId === "string" ? ws.selectedHotspotId : null,
     activeViewId: typeof ws.activeViewId === "string" ? ws.activeViewId : null,
   };
-  return { status: "restored", session: { version: SESSION_VERSION, savedAt: data.savedAt, conversation, workspace } };
+  return { status: "restored", session: { version: SESSION_VERSION, lastActivityAt: last, conversation, workspace } };
 }

@@ -80,7 +80,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Phones and tablets: compact header with a primary "Get help" action and a menu. */}
       <header
-        className="sticky top-0 z-40 border-b border-ink-750 bg-ink-900/95 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden"
+        data-app-header
+        // Sticky only on tall screens: on short screens (or high browser zoom) it would cover focused content.
+        className="relative top-0 z-40 border-b border-ink-750 bg-ink-900/95 pt-[env(safe-area-inset-top)] backdrop-blur tall:sticky lg:hidden"
         onKeyDown={(event) => {
           if (event.key === "Escape" && menuOpen) closeMenu(true);
         }}

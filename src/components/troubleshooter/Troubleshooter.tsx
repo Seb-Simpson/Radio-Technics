@@ -21,7 +21,7 @@ const universalIcons: Record<string, typeof CircleHelp> = {
 };
 
 export function Troubleshooter() {
-  const { conversation, send, endSession, restored, dismissRestored } = useTroubleshooter();
+  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired } = useTroubleshooter();
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
@@ -107,8 +107,8 @@ export function Troubleshooter() {
       return;
     }
     setInputError(null);
-    send({ type: "text", text: draft });
-    setDraft("");
+    // If the session had expired it is cleared and the message is not sent; keep the text so it can be resent.
+    if (send({ type: "text", text: draft })) setDraft("");
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -120,7 +120,7 @@ export function Troubleshooter() {
       <section
         aria-label="Troubleshooting conversation"
         // Phones/tablets: the conversation flows with the page so it gets the whole screen.
-        className="flex flex-col overflow-clip rounded-xl border border-ink-750 bg-ink-900 xl:h-[calc(100dvh-11rem)]"
+        className="flex flex-col overflow-clip rounded-xl border border-ink-750 bg-ink-900 xl:tall:h-[calc(100dvh-13rem)]"
       >
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-750 px-4 py-3 sm:px-5">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -145,6 +145,42 @@ export function Troubleshooter() {
         </header>
 
         {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
+
+        {/* Urgency stays visible whatever step the conversation is on. */}
+        {conversation.urgent ? (
+          <div role="status" data-testid="urgent-banner" className="flex gap-2.5 border-b border-alert-400/40 bg-alert-900/50 px-4 py-2.5 text-[13px] sm:px-5">
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-alert-300" />
+            <p className="text-ink-50">
+              <span className="font-semibold text-alert-300">Urgent: silence on air reported.</span> Contact technical support now.
+              Their contact details haven&apos;t been configured in Radio Technics yet.
+            </p>
+          </div>
+        ) : conversation.possibleSilence ? (
+          <div role="status" data-testid="possible-silence-banner" className="flex gap-2.5 border-b border-caution-400/30 bg-caution-900/40 px-4 py-2.5 text-[13px] sm:px-5">
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-caution-400" />
+            <p className="text-ink-100">
+              <span className="font-semibold text-caution-300">Possible silence reported.</span> If the station is silent on air, say so
+              — it will be treated as urgent.
+            </p>
+          </div>
+        ) : null}
+
+        {expired && (
+          <div role="status" data-testid="expired-notice" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
+            <p className="text-ink-200">
+              The previous session ended after two hours without activity, and its conversation was cleared from this computer. Your
+              last message wasn&apos;t sent — send it again to start a new conversation.
+            </p>
+            <button
+              type="button"
+              onClick={dismissExpired}
+              aria-label="Dismiss session ended message"
+              className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </div>
+        )}
 
         {restored && !confirmingClear && (
           <div role="status" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
@@ -186,7 +222,7 @@ export function Troubleshooter() {
           aria-live="polite"
           aria-label="Conversation"
           tabIndex={0}
-          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:flex-1 xl:overflow-y-auto xl:scroll-smooth"
+          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:tall:flex-1 xl:tall:overflow-y-auto xl:tall:scroll-smooth"
         >
           <ol className="flex flex-col gap-3">
             {conversation.messages.map((message) => (
@@ -202,7 +238,7 @@ export function Troubleshooter() {
             {answerOptions.length > 0 && (
               <div
                 className={cn(
-                  "grid gap-2 xl:max-h-[38dvh] xl:overflow-y-auto",
+                  "grid gap-2 xl:tall:max-h-[38dvh] xl:tall:overflow-y-auto",
                   (step.kind === "start" || answerOptions.length > 4) && "sm:grid-cols-2",
                 )}
               >
@@ -280,7 +316,7 @@ export function Troubleshooter() {
       </section>
 
       {showEmbedded && (
-        <section aria-label="Studio workspace" className="flex min-h-0 flex-col gap-2 xl:h-[calc(100dvh-11rem)]">
+        <section aria-label="Studio workspace" className="flex min-h-0 flex-col gap-2 xl:tall:h-[calc(100dvh-13rem)]">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-semibold text-ink-100">Studio workspace</h2>
             <p className="text-xs text-ink-400">The troubleshooter highlights equipment here</p>

@@ -147,7 +147,7 @@ describe("structured references", () => {
       c.equipment[0]!.flowEntryNodeId = "no-such-node";
       c.articles[0]!.equipmentIds.push("no-such-equipment");
       c.flowNodes[0]!.options[0]!.next = "nowhere";
-      c.flowNodes[0]!.options[0]!.signals = ["sparkles" as never];
+      c.flowNodes[0]!.options[0]!.audio = "sparkles" as never;
       c.views[0]!.src = "https://example.com/photo.jpg";
       return c;
     }).join("\n");
@@ -155,7 +155,7 @@ describe("structured references", () => {
     expect(messages).toMatch(/missing flow node "no-such-node"/);
     expect(messages).toMatch(/missing equipment "no-such-equipment"/);
     expect(messages).toMatch(/missing node "nowhere"/);
-    expect(messages).toMatch(/unknown signal "sparkles"/);
+    expect(messages).toMatch(/unknown audio claim "sparkles"/);
     expect(messages).toMatch(/src must be a file in \/studio\/photos\//);
   });
 

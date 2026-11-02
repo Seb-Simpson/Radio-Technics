@@ -119,10 +119,10 @@ test("dashboard topic starts a troubleshooting conversation", async ({ page }) =
 
 test("knowledge article shows verification status", async ({ page }) => {
   await page.goto("/knowledge");
-  await page.getByLabel("Search help topics").fill("green");
-  await page.getByRole("link", { name: /The green next-song button/ }).click();
+  await page.getByLabel("Describe the problem, or search for a topic").fill("green button");
+  await page.getByRole("region", { name: "Search results" }).locator('a[href="/knowledge/guide-green-button"]').click();
   await expect(page.getByRole("heading", { level: 1, name: "The green next-song button" })).toBeVisible();
-  await expect(page.getByText("Do not treat this article as an official station procedure.", { exact: false })).toBeVisible();
+  await expect(page.getByText("It is not an approved station procedure", { exact: false })).toBeVisible();
 });
 
 test("unknown pages show a helpful not-found page", async ({ page }) => {

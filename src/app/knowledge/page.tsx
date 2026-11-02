@@ -12,10 +12,13 @@ export default function KnowledgePage() {
       <PageHeader
         eyebrow="Knowledge Centre"
         title="Guides and help topics"
-        description="Every article shows how far it can be trusted. Only engineer-verified information should be treated as station procedure."
+        description="Search in your own words, or browse by equipment. Articles explain and help you describe a problem; only engineer-approved procedures are instructions."
       />
-      <Notice title="No articles have been verified by the station engineer yet">
-        Articles currently describe what is known and which questions to ask. They don&apos;t contain repair steps.
+      <Notice title="How far each article can be trusted">
+        Every article shows its level: <strong className="font-medium text-ink-100">engineer verified</strong> (approved for this studio),{" "}
+        <strong className="font-medium text-ink-100">station reported</strong>, <strong className="font-medium text-ink-100">manufacturer documentation</strong>{" "}
+        (how a product generally works — not permission to change anything) or <strong className="font-medium text-ink-100">unverified draft</strong>.
+        Nothing has been verified by the station engineer yet, and there are no approved procedures.
       </Notice>
       <KnowledgeCentre />
     </PageContainer>

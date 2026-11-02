@@ -52,3 +52,19 @@ test("corrupted saved data is ignored without breaking the page", async ({ page 
   expect(await page.evaluate(() => sessionStorage.getItem("radio-technics.session"))).toBeNull();
   expect(errors).toEqual([]);
 });
+
+test("an open tab clears the conversation after two hours idle (simulated clock)", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/troubleshooter");
+  await page.getByLabel("Describe the problem").fill("The green thing isn't working");
+  await page.getByLabel("Describe the problem").press("Enter");
+  await expect(page.getByRole("log").getByText("The green thing isn't working")).toBeVisible();
+
+  await page.clock.fastForward("01:59:00");
+  await expect(page.getByRole("log").getByText("The green thing isn't working")).toBeVisible();
+
+  await page.clock.fastForward("00:02:00");
+  await expect(page.getByRole("log").getByText("The green thing isn't working")).toHaveCount(0);
+  await expect(page.getByTestId("expired-notice")).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("radio-technics.session"))).toBeNull();
+});

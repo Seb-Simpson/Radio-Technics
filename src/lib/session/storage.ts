@@ -8,7 +8,9 @@ import { isKnownEquipmentId } from "@/lib/content/equipment";
  * Radio Technics may run on shared studio computers, so a conversation is
  * kept only:
  *   - in sessionStorage (cleared when the browser tab closes), and
- *   - for SESSION_MAX_IDLE_MS since the last change.
+ *   - for SESSION_MAX_IDLE_MS since the last USER activity. The time saved is
+ *     the last activity time supplied by the caller, never "now", so saves
+ *     caused by background renders cannot extend a session.
  * Restored data is fully validated; anything malformed, from another
  * version, or referring to unknown content is discarded rather than used.
  */
@@ -26,7 +28,8 @@ export interface SavedWorkspace {
 
 export interface SavedSession {
   version: typeof SESSION_VERSION;
-  savedAt: number;
+  /** When the user last did something (ms since epoch). */
+  lastActivityAt: number;
   conversation: ConversationState;
   workspace: SavedWorkspace;
 }
@@ -140,9 +143,14 @@ export function parseConversation(raw: unknown): ConversationState | null {
 /* Load / save / clear                                                 */
 /* ------------------------------------------------------------------ */
 
-export function saveSession(storage: StorageLike | null, conversation: ConversationState, workspace: SavedWorkspace, now = Date.now()): void {
-  if (!storage) return;
-  const data: SavedSession = { version: SESSION_VERSION, savedAt: now, conversation, workspace };
+/** True when more than the idle limit has passed since the last user activity. */
+export function isSessionExpired(lastActivityAt: number, now: number): boolean {
+  return now - lastActivityAt > SESSION_MAX_IDLE_MS;
+}
+
+export function saveSession(storage: StorageLike | null, conversation: ConversationState, workspace: SavedWorkspace, lastActivityAt: number): void {
+  if (!storage || !Number.isFinite(lastActivityAt)) return;
+  const data: SavedSession = { version: SESSION_VERSION, lastActivityAt, conversation, workspace };
   try {
     storage.setItem(SESSION_KEY, JSON.stringify(data));
   } catch {
@@ -187,8 +195,9 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
   }
   if (!isObject(data)) return discard("invalid");
   if (data.version !== SESSION_VERSION) return discard("outdated");
-  if (typeof data.savedAt !== "number" || !Number.isFinite(data.savedAt) || data.savedAt > now + 60_000) return discard("invalid");
-  if (now - data.savedAt > SESSION_MAX_IDLE_MS) return discard("expired");
+  const last = data.lastActivityAt;
+  if (typeof last !== "number" || !Number.isFinite(last) || last > now + 60_000) return discard("invalid");
+  if (isSessionExpired(last, now)) return discard("expired");
 
   const conversation = parseConversation(data.conversation);
   if (!conversation) return discard("invalid");
@@ -197,5 +206,5 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
     selectedEquipmentId: typeof ws.selectedEquipmentId === "string" ? ws.selectedEquipmentId : null,
     activeViewId: typeof ws.activeViewId === "string" ? ws.activeViewId : null,
   };
-  return { status: "restored", session: { version: SESSION_VERSION, savedAt: data.savedAt, conversation, workspace } };
+  return { status: "restored", session: { version: SESSION_VERSION, lastActivityAt: last, conversation, workspace } };
 }

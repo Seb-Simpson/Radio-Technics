@@ -21,7 +21,7 @@ const universalIcons: Record<string, typeof CircleHelp> = {
 };
 
 export function Troubleshooter() {
-  const { conversation, send, endSession, restored, dismissRestored } = useTroubleshooter();
+  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired } = useTroubleshooter();
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
@@ -107,8 +107,8 @@ export function Troubleshooter() {
       return;
     }
     setInputError(null);
-    send({ type: "text", text: draft });
-    setDraft("");
+    // If the session had expired it is cleared and the message is not sent; keep the text so it can be resent.
+    if (send({ type: "text", text: draft })) setDraft("");
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -164,6 +164,23 @@ export function Troubleshooter() {
             </p>
           </div>
         ) : null}
+
+        {expired && (
+          <div role="status" data-testid="expired-notice" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
+            <p className="text-ink-200">
+              The previous session ended after two hours without activity, and its conversation was cleared from this computer. Your
+              last message wasn&apos;t sent — send it again to start a new conversation.
+            </p>
+            <button
+              type="button"
+              onClick={dismissExpired}
+              aria-label="Dismiss session ended message"
+              className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </div>
+        )}
 
         {restored && !confirmingClear && (
           <div role="status" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">

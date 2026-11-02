@@ -1,0 +1,105 @@
+import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import { StudioExplorer } from "@/components/studio/StudioExplorer";
+import { Troubleshooter } from "@/components/troubleshooter/Troubleshooter";
+import { media, navigation } from "../setup";
+import { renderWithProviders } from "./render";
+
+const log = () => screen.getByRole("log", { name: "Conversation" });
+
+describe("Troubleshooter UI", () => {
+  it("is clearly labelled as a prototype", () => {
+    renderWithProviders(<Troubleshooter />);
+    expect(screen.getByText("Scripted responses — not a live AI")).toBeInTheDocument();
+  });
+
+  it("asks for clarification when the description is vague", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    await user.type(screen.getByLabelText("Describe the problem"), "It's not doing anything{Enter}");
+    expect(within(log()).getByText("It's not doing anything")).toBeInTheDocument();
+    expect(within(log()).getByText(/^What isn't responding\?/)).toBeInTheDocument();
+    for (const label of ["I'm not sure", "Show me where", "I need technical support"]) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("shows a clear error for empty input", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Type a short description");
+  });
+
+  it("advances through a flow using response buttons", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    await user.click(screen.getByRole("button", { name: "I can't hear anything" }));
+    expect(within(log()).getByText("Where are you trying to hear the sound?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "In my headphones" }));
+    expect(within(log()).getByText("Is anything at all coming through your headphones?")).toBeInTheDocument();
+  });
+
+  it("uses the equipment selected in the Studio Explorer (scenario 2)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <>
+        <StudioExplorer />
+        <Troubleshooter />
+      </>,
+    );
+    await user.click(screen.getByRole("button", { name: /^Green Myriad button \(placeholder/ }));
+    expect(screen.getByText("Selected in Studio Explorer:")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Describe the problem"), "It's not working{Enter}");
+    expect(
+      within(log()).getByText("Are you referring to the green button that advances Myriad to the next song?"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Yes, that's it" }));
+    expect(within(log()).getByText("What happened on the Myriad screen after you pressed the green button?")).toBeInTheDocument();
+  });
+
+  it("'Show me where' highlights equipment in the embedded studio on wide screens", async () => {
+    media.wide = true;
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    const workspace = await screen.findByRole("region", { name: "Studio workspace" });
+    await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+    await user.click(screen.getByRole("button", { name: "Show me where" }));
+    const hotspot = within(workspace).getByRole("button", { name: /^Green Myriad button/ });
+    expect(hotspot).toHaveAttribute("data-highlighted", "true");
+    expect(within(workspace).getByRole("heading", { level: 2, name: "Green Myriad button" })).toBeInTheDocument();
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it("lets the user pick equipment in the embedded studio only when asked to", async () => {
+    media.wide = true;
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    const workspace = await screen.findByRole("region", { name: "Studio workspace" });
+    await user.type(screen.getByLabelText("Describe the problem"), "It's not doing anything{Enter}");
+    await user.click(within(workspace).getByRole("button", { name: /^Zoom video camera \(placeholder/ }));
+    await user.click(within(workspace).getByRole("button", { name: "Use in troubleshooter" }));
+    expect(within(log()).getByText("What's happening with the video camera?")).toBeInTheDocument();
+    // Mid-question, selecting other equipment must not silently restart the flow.
+    await user.click(within(workspace).getByRole("button", { name: /^Equipment rack|^Technical equipment rack \(placeholder/ }));
+    expect(within(workspace).queryByRole("button", { name: "Use in troubleshooter" })).not.toBeInTheDocument();
+  });
+
+  it("'Show me where' opens the Studio Explorer on narrow screens", async () => {
+    const user = userEvent.setup();
+    navigation.pathname = "/troubleshooter";
+    renderWithProviders(<Troubleshooter />);
+    await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+    await user.click(screen.getByRole("button", { name: "Show me where" }));
+    expect(navigation.push).toHaveBeenCalledWith("/studio");
+  });
+
+  it("offers a support summary at the end of a flow", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    await user.click(screen.getByRole("button", { name: "I need technical support" }));
+    expect(screen.getByRole("heading", { name: "Summary for technical support" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go back to my last question" })).toBeInTheDocument();
+  });
+});

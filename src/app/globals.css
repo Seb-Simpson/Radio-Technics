@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/*
+ * Radio Technics design tokens.
+ * Charcoal/slate surfaces, restrained teal accent, amber for caution.
+ */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --color-ink-950: #0b0e10;
+  --color-ink-900: #101417;
+  --color-ink-850: #14191c;
+  --color-ink-800: #192024;
+  --color-ink-750: #1e262b;
+  --color-ink-700: #263036;
+  --color-ink-600: #344049;
+  --color-ink-500: #4a5862;
+  --color-ink-400: #6d7c86;
+  --color-ink-300: #93a1aa;
+  --color-ink-200: #bcc6cc;
+  --color-ink-100: #dfe5e8;
+  --color-ink-50: #f1f4f5;
+
+  --color-signal-300: #7fe0d2;
+  --color-signal-400: #4cc9b8;
+  --color-signal-500: #2fae9d;
+  --color-signal-600: #238a7d;
+  --color-signal-900: #10322e;
+
+  --color-caution-300: #f2cf8a;
+  --color-caution-400: #e7b354;
+  --color-caution-900: #3a2b10;
+
+  --color-alert-300: #f5a49b;
+  --color-alert-400: #e5685b;
+  --color-alert-900: #3d1915;
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-ink-950 text-ink-100 font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-signal-500) 40%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-signal-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* Respect reduced-motion preferences everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes rt-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rt-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-signal-400) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@utility animate-fade-up {
+  animation: rt-fade-up 220ms var(--ease-out-quart) both;
+}
+
+@utility animate-pulse-ring {
+  animation: rt-pulse-ring 1.6s ease-out 3;
+}

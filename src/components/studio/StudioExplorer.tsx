@@ -3,7 +3,7 @@
 import { ArrowLeft, ImagePlus, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { hotspots as defaultHotspots } from "@/data/hotspots";
 import { EXPECTED_PHOTO_COUNT } from "@/data/studio-views";
 import { Notice } from "@/components/ui/Notice";
@@ -36,6 +36,59 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
   // Phones and tablets show the selected equipment in a bottom sheet.
   const useSheet = !embedded && !wide;
   const viewerRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const sheetHeightRef = useRef(0);
+  const reportSheetHeight = useCallback((height: number) => {
+    sheetHeightRef.current = height;
+    setSheetHeight(height);
+  }, []);
+
+  /**
+   * Keep a focused element visible in the part of the window not covered by
+   * the sticky header or the bottom sheet (WCAG 2.4.11 Focus Not Obscured).
+   */
+  const revealFocused = useCallback((element: Element | null) => {
+    if (!(element instanceof HTMLElement) || !rootRef.current?.contains(element)) return;
+    if (element.closest('[data-testid="equipment-sheet"]')) return; // already in the overlay
+    const header = document.querySelector<HTMLElement>("[data-app-header]");
+    const headerBottom = header && getComputedStyle(header).position === "sticky" ? header.getBoundingClientRect().bottom : 0;
+    const top = headerBottom + 8;
+    const bottom = window.innerHeight - sheetHeightRef.current - 8;
+    const rect = element.getBoundingClientRect();
+    let delta = 0;
+    if (rect.bottom > bottom) delta = rect.bottom - bottom;
+    if (rect.top - delta < top) delta = rect.top - top; // prefer showing the top of large items
+    if (Math.abs(delta) > 1) window.scrollBy({ top: delta, behavior: "auto" });
+  }, []);
+
+  // Any focus inside the explorer is kept clear of the overlays.
+  useEffect(() => {
+    if (!useSheet) return;
+    const onFocusIn = (event: FocusEvent) => revealFocused(event.target as Element);
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, [useSheet, revealFocused]);
+
+  // When the sheet opens or changes size, re-check whatever has focus.
+  useEffect(() => {
+    if (useSheet && sheetHeight > 0) revealFocused(document.activeElement);
+  }, [useSheet, sheetHeight, revealFocused]);
+
+  /** Closing details returns focus to the item's hotspot (or the photo), never to nowhere. */
+  const closeDetails = () => {
+    const equipmentId = state.selectedEquipmentId;
+    const focusWasInPanel = document.activeElement?.closest('[aria-label="Selected equipment"]') !== null;
+    run([{ type: "clear_selection" }]);
+    if (!focusWasInPanel) return;
+    requestAnimationFrame(() => {
+      const viewer = viewerRef.current;
+      const target =
+        (equipmentId && viewer?.querySelector<HTMLElement>(`[data-equipment-id="${equipmentId}"]`)) ||
+        viewer?.querySelector<HTMLElement>('[aria-roledescription="zoomable studio view"]');
+      target?.focus();
+    });
+  };
 
   // Phones/tablets: after "Show me where", bring the photo to the top of the screen so the
   // highlighted (and zoomed-to) equipment sits above the bottom sheet.
@@ -71,7 +124,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
   const panel = (
     <EquipmentPanel
       equipmentId={state.selectedEquipmentId}
-      onClose={() => run([{ type: "clear_selection" }])}
+      onClose={closeDetails}
       onTroubleshoot={canTroubleshoot ? troubleshoot : undefined}
       troubleshootLabel={embedded ? "Use in troubleshooter" : "Troubleshoot this"}
       inCurrentView={selectedInView}
@@ -80,7 +133,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
   );
 
   return (
-    <div className={cn("flex flex-col gap-4", embedded && "h-full")}>
+    <div ref={rootRef} className={cn("flex flex-col gap-4", embedded && "h-full")}>
       {!hasRealPhotos && !embedded && <MissingPhotosNotice />}
 
       {!embedded && conversationActive && <ConversationLink prompt={describeStep(conversation).prompt} />}
@@ -105,6 +158,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
               highlightedEquipmentId={state.highlightedEquipmentId}
               focusRequest={state.focusRequest}
               onSelectEquipment={selectEquipment}
+              onHotspotFocusVisible={useSheet ? revealFocused : undefined}
               className={embedded ? "aspect-[16/10] w-full" : "aspect-[4/5] w-full sm:aspect-[4/3] xl:aspect-auto xl:h-[min(64vh,700px)]"}
             />
             </div>
@@ -136,12 +190,13 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
 
       {useSheet && state.selectedEquipmentId && (
         <>
-          {/* Room to scroll the page above the sheet. */}
-          <div aria-hidden className="h-56" />
+          {/* Room to scroll everything above the sheet, matching its real height. */}
+          <div aria-hidden style={{ height: Math.max(sheetHeight, 0) }} />
           <EquipmentSheet
             key={state.selectedEquipmentId}
             equipmentId={state.selectedEquipmentId}
-            onClose={() => run([{ type: "clear_selection" }])}
+            onHeightChange={reportSheetHeight}
+            onClose={closeDetails}
             onTroubleshoot={troubleshoot}
             conversationActive={conversationActive}
             details={panel}

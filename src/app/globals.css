@@ -4,6 +4,9 @@
  * Radio Technics design tokens.
  * Charcoal/slate surfaces, restrained teal accent, amber for caution.
  */
+/* Screens tall enough for fixed-height panels; shorter screens let content flow and scroll. */
+@custom-variant tall (@media (min-height: 720px));
+
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;

@@ -120,7 +120,7 @@ export function Troubleshooter() {
       <section
         aria-label="Troubleshooting conversation"
         // Phones/tablets: the conversation flows with the page so it gets the whole screen.
-        className="flex flex-col overflow-clip rounded-xl border border-ink-750 bg-ink-900 xl:h-[calc(100dvh-11rem)]"
+        className="flex flex-col overflow-clip rounded-xl border border-ink-750 bg-ink-900 xl:tall:h-[calc(100dvh-13rem)]"
       >
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-750 px-4 py-3 sm:px-5">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -222,7 +222,7 @@ export function Troubleshooter() {
           aria-live="polite"
           aria-label="Conversation"
           tabIndex={0}
-          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:flex-1 xl:overflow-y-auto xl:scroll-smooth"
+          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:tall:flex-1 xl:tall:overflow-y-auto xl:tall:scroll-smooth"
         >
           <ol className="flex flex-col gap-3">
             {conversation.messages.map((message) => (
@@ -238,7 +238,7 @@ export function Troubleshooter() {
             {answerOptions.length > 0 && (
               <div
                 className={cn(
-                  "grid gap-2 xl:max-h-[38dvh] xl:overflow-y-auto",
+                  "grid gap-2 xl:tall:max-h-[38dvh] xl:tall:overflow-y-auto",
                   (step.kind === "start" || answerOptions.length > 4) && "sm:grid-cols-2",
                 )}
               >
@@ -316,7 +316,7 @@ export function Troubleshooter() {
       </section>
 
       {showEmbedded && (
-        <section aria-label="Studio workspace" className="flex min-h-0 flex-col gap-2 xl:h-[calc(100dvh-11rem)]">
+        <section aria-label="Studio workspace" className="flex min-h-0 flex-col gap-2 xl:tall:h-[calc(100dvh-13rem)]">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-semibold text-ink-100">Studio workspace</h2>
             <p className="text-xs text-ink-400">The troubleshooter highlights equipment here</p>

@@ -56,7 +56,18 @@ export function Troubleshooter() {
   // Keep the newest message in view and move keyboard focus to the new options.
   useEffect(() => {
     const log = logRef.current;
-    if (log) log.scrollTop = log.scrollHeight;
+    if (log && log.scrollHeight > log.clientHeight + 1) {
+      // Wide layout: the log scrolls internally.
+      log.scrollTop = log.scrollHeight;
+    } else if (log && conversation.messages.length > 1) {
+      // Phones/tablets: the page scrolls. Bring the newest message into view below the header.
+      const last = log.querySelector("li:last-child");
+      const top = last ? last.getBoundingClientRect().top : 0;
+      if (last && (top < 72 || top > window.innerHeight - 240)) {
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo?.({ top: window.scrollY + top - 80, behavior: reduce ? "auto" : "smooth" });
+      }
+    }
     if (focusOptionsNext.current) {
       focusOptionsNext.current = false;
       optionsRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
@@ -108,14 +119,17 @@ export function Troubleshooter() {
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section
         aria-label="Troubleshooting conversation"
-        className="flex min-h-[min(640px,calc(100dvh-12rem))] flex-col overflow-hidden rounded-xl border border-ink-750 bg-ink-900 xl:h-[calc(100dvh-11rem)]"
+        // Phones/tablets: the conversation flows with the page so it gets the whole screen.
+        className="flex flex-col overflow-clip rounded-xl border border-ink-750 bg-ink-900 xl:h-[calc(100dvh-11rem)]"
       >
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-750 px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <span className="rounded border border-caution-400/30 bg-caution-900/40 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wider text-caution-300 uppercase">
               Prototype
             </span>
-            <p className="text-sm text-ink-300">Scripted responses — not a live AI</p>
+            <p className="text-sm text-ink-300">
+              Scripted <span className="max-sm:hidden">responses </span>— not a live AI
+            </p>
           </div>
           <button
             ref={clearButtonRef}
@@ -172,7 +186,7 @@ export function Troubleshooter() {
           aria-live="polite"
           aria-label="Conversation"
           tabIndex={0}
-          className="flex-1 overflow-y-auto scroll-smooth px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5"
+          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:flex-1 xl:overflow-y-auto xl:scroll-smooth"
         >
           <ol className="flex flex-col gap-3">
             {conversation.messages.map((message) => (
@@ -181,14 +195,14 @@ export function Troubleshooter() {
           </ol>
         </div>
 
-        <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-4 sm:px-5">
+        <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-3 sm:px-5">
           {showSummary && <SupportSummary text={buildSupportSummary(conversation)} />}
 
           <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses">
             {answerOptions.length > 0 && (
               <div
                 className={cn(
-                  "grid max-h-[38dvh] gap-2 overflow-y-auto",
+                  "grid gap-2 xl:max-h-[38dvh] xl:overflow-y-auto",
                   (step.kind === "start" || answerOptions.length > 4) && "sm:grid-cols-2",
                 )}
               >
@@ -226,7 +240,14 @@ export function Troubleshooter() {
             )}
           </div>
 
-          <form onSubmit={submit} className="mt-3">
+        </div>
+
+          <form
+            onSubmit={submit}
+            // Not sticky on phones: a pinned box would cover answer buttons (WCAG 2.4.11 / 2.5.8).
+            // Focusing it brings it above the on-screen keyboard.
+            className="scroll-mb-4 border-t border-ink-750 bg-ink-900 px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 xl:pb-4"
+          >
             <label htmlFor="troubleshooter-input" className="sr-only">
               Describe the problem
             </label>
@@ -241,7 +262,7 @@ export function Troubleshooter() {
                   if (inputError) setInputError(null);
                 }}
                 onKeyDown={onKeyDown}
-                placeholder="Describe the problem in your own words…"
+                placeholder="Describe the problem…"
                 aria-invalid={inputError ? true : undefined}
                 aria-describedby={inputError ? "troubleshooter-input-error" : undefined}
                 className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-[15px] text-ink-50 placeholder:text-ink-400 focus:outline-none"
@@ -256,7 +277,6 @@ export function Troubleshooter() {
               </p>
             )}
           </form>
-        </div>
       </section>
 
       {showEmbedded && (

@@ -11,7 +11,8 @@ const log = () => screen.getByRole("log", { name: "Conversation" });
 describe("Troubleshooter UI", () => {
   it("is clearly labelled as a prototype", () => {
     renderWithProviders(<Troubleshooter />);
-    expect(screen.getByText("Scripted responses — not a live AI")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "P" && el.textContent === "Scripted responses — not a live AI")).toBeInTheDocument();
+    expect(screen.getByText("Prototype")).toBeInTheDocument();
   });
 
   it("asks for clarification when the description is vague", async () => {

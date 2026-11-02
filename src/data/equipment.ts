@@ -180,6 +180,7 @@ export const equipment: EquipmentRecord[] = [
         status: "station-reported",
         source: STATION,
       },
+      { text: "The station uses Myriad 6 in live-assist mode.", status: "station-reported", source: STATION },
       { text: "The window title reads Myriad Playout v6 by Broadcast Radio.", status: "draft", source: PHOTO("Myriad screen") },
       {
         text: "The screen shows four players (Player 1\u20134) and play-mode buttons labelled Standby, Live and AutoFade.",
@@ -193,9 +194,9 @@ export const equipment: EquipmentRecord[] = [
       "Unsure what the Myriad screen is showing",
     ],
     requiresVerification: [
-      "Confirm the installed version (the screen shows Myriad Playout v6)",
+      "Confirm the installed version (station reports Myriad 6; the screen shows Myriad Playout v6)",
       "Which computer and screen Myriad runs on",
-      "Which play modes presenters use (the screen shows Standby, Live and AutoFade), and what each means here",
+      "What live-assist mode means for presenters at this station, and whether the other play modes on screen (Standby, AutoFade) are ever used",
       "Whether presenters can also advance to the next song from the Myriad screen",
     ],
     aliases: ["myriad", "playout", "playout software", "playlist", "next song", "next track", "song", "songs", "track", "music"],
@@ -212,6 +213,7 @@ export const equipment: EquipmentRecord[] = [
     confirmationPhrase: "that advances Myriad to the next song",
     knownInformation: [
       { text: "Pressing the green button advances Myriad to the next song.", status: "station-reported", source: STATION },
+      { text: "Myriad runs in live-assist mode (station reported). How the button behaves in other modes is unknown.", status: "station-reported", source: STATION },
       {
         text: "It is a black box with a large green push button and a small hole above it that may be an indicator light.",
         status: "draft",
@@ -229,7 +231,7 @@ export const equipment: EquipmentRecord[] = [
     ],
     requiresVerification: [
       "How the button is connected to Myriad (wiring and trigger mechanism)",
-      "What the button does in each Myriad playout mode",
+      "What the button does in live-assist mode in detail, and whether it behaves differently in any other mode",
       "What happens if the button is pressed more than once",
       "Whether the small hole above the button is an indicator light, and what it shows",
     ],

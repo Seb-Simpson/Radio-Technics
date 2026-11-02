@@ -56,7 +56,8 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
   const [loaded, setLoaded] = useState(false);
   const current = useRef(conversation);
   const selected = useRef(workspace.selectedEquipmentId);
-  const selectionKey = `${workspace.selectedEquipmentId ?? ""}|${workspace.selectedHotspotId ?? ""}`;
+  // Includes the selection counter: re-selecting the same item is deliberate activity (RT-QA-002B).
+  const selectionKey = `${workspace.selectedEquipmentId ?? ""}|${workspace.selectedHotspotId ?? ""}|${workspace.selectionSeq}`;
   const lastSelectionKey = useRef(selectionKey);
   /** Time of the last user action, or null when there is nothing to expire. */
   const lastActivity = useRef<number | null>(null);
@@ -161,7 +162,8 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       { selectedEquipmentId: workspace.selectedEquipmentId, selectedHotspotId: workspace.selectedHotspotId, activeViewId: workspace.activeViewId },
       lastActivity.current,
     );
-  }, [loaded, conversation, workspace.selectedEquipmentId, workspace.selectedHotspotId, workspace.activeViewId]);
+    // selectionSeq: re-selecting the same item renews activity, which must be saved too.
+  }, [loaded, conversation, workspace.selectedEquipmentId, workspace.selectedHotspotId, workspace.activeViewId, workspace.selectionSeq]);
 
   const send = useCallback(
     (input: UserInput) => {

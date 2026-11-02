@@ -424,18 +424,43 @@ const NOT_WORKING = ["not working", "not doing anything", "nothing happens", "no
 const REQUEST_FORM =
   /\b(i (really |urgently )?(need|want|would like)|we (need|want)|(can|could|may) (i|we) (get|have|speak|talk|call|contact|see)|(can|could|will|would) (someone|somebody|anyone|you)|please (get|call|fetch|send|contact|find)|get (me |us )?(a|an|the|some)|(speak|talk) (to|with)|call (a|an|the|someone|somebody|support)|ring (a|an|the|someone|support)|phone (a|an|the|someone|support)|contact (a|an|the|someone|support)|fetch (a|an|the|someone)|is there (someone|anyone|somebody))\b/;
 /** A person being asked for. */
-const PERSON_TARGET = /\b(human|person|people|someone|somebody|anyone|engineer|engineers|technician|manager|staff)\b/;
+const PERSON_TARGET = /\b(human|person|people|someone|somebody|anyone|engineer|engineers|technician|manager|staff|helpdesk|help desk|service desk|it support|it team|it department)\b/;
 /** Support being asked for. "Can you help me…" is addressed to the assistant, so it doesn't count on its own. */
-const SUPPORT_TARGET = /\b(tech support|technical support|support|help)\b/;
+const SUPPORT_TARGET = /\b(tech support|technical support|support|help|assistance)\b/;
+/**
+ * RT-QA-002B: other ways of asking for a person ("put me through to support",
+ * "who do I call?", "page the engineer", "is anyone available?"). Declines
+ * ("don't call anyone") are excluded before these are checked.
+ */
+const DIRECT_REQUEST = new RegExp(
+  [
+    "\\b(put me through|transfer me|connect me|pass me) (to|with|on to)\\b",
+    "\\bescalate\\b",
+    "\\bsend (someone|somebody|an engineer|a technician|help|the engineer|for (the |an )?engineer)\\b",
+    "\\bpage (the|an|a|someone|somebody)\\b",
+    "\\btell (the|an|a) (engineer|technician|manager|support)\\b",
+    "\\blet (someone|somebody|the engineer|support|the manager|tech support|technical support) know\\b",
+    "\\bfind (me )?(someone|somebody|an engineer|a technician)\\b",
+    "\\bneeds? (a|an|the) (engineer|technician|person|human|expert)\\b",
+    "\\bwho (do|should|can|could|shall) (i|we) (call|contact|ring|phone|ask|speak to|talk to|get)\\b",
+    "\\bwhere (do|can|should) (i|we) (get|find) help\\b",
+    "\\b(number|contact details|details|phone number) for (tech support|technical support|support|the engineer|an engineer)\\b",
+    "\\bis (anyone|anybody|someone|somebody) (available|around|there|free|about)\\b",
+  ].join("|"),
+);
+/** "I need IT" — only the capitalised word, so "I need it to work" doesn't count. */
+const IT_REQUEST = /\b(need|contact|call|ring|get|phone|email|message)\s+(the\s+)?IT\b/;
 const ADDRESSED_TO_ASSISTANT = /\b(can|could|will|would) you\b/;
 const STANDALONE_HELP = new Set(["help", "help me", "help please", "please help", "help us", "technical support", "tech support", "support", "support please", "get help", "sos", "need help", "i need help", "engineer please", "get the engineer", "get an engineer", "human please"]);
 const DECLINES = /\b(do not|dont|no) (need|want|call|get|bother)\b|\bno need\b|\bwithout help\b|\bnot need\b/;
 
-function isHelpRequest(clauses: string[]): boolean {
+function isHelpRequest(clauses: string[], rawText = ""): boolean {
+  if (IT_REQUEST.test(rawText) && !DECLINES.test(normaliseReply(rawText))) return true;
   return clauses.some((raw) => {
     const clause = stripFillers(raw);
     if (DECLINES.test(clause)) return false;
     if (STANDALONE_HELP.has(clause)) return true;
+    if (DIRECT_REQUEST.test(clause)) return true;
     if (!REQUEST_FORM.test(clause)) return false;
     if (PERSON_TARGET.test(clause)) return true;
     return SUPPORT_TARGET.test(clause) && (!ADDRESSED_TO_ASSISTANT.test(clause) || /\b(tech support|technical support)\b/.test(clause));
@@ -540,7 +565,7 @@ export function understand(rawText: string): Understanding {
     signals,
     negatedSignals,
     clearAirSilence,
-    helpRequest: isHelpRequest(clauses),
+    helpRequest: isHelpRequest(clauses, text),
     procedureQuestion,
     isQuestion,
     offAir,

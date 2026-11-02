@@ -22,15 +22,22 @@ Run `npm run check` before every commit, and `npm run test:e2e` after UI changes
 - **Shared types** live in `src/types/index.ts` (domain) and `src/lib/troubleshooter/types.ts` (conversation).
 - **Lookups** go through `src/lib/content/*` and `src/lib/knowledge/search.ts`, which return `undefined` for unknown IDs — always handle that.
 - **Workspace commands** (`src/lib/workspace/commands.ts`) are the only way troubleshooting logic may change the UI. Every command passes `validateWorkspaceCommand` (allow-listed type + real IDs). Do not add command types that touch real equipment, run code, or navigate to arbitrary URLs.
+- **Reply understanding** (`src/lib/troubleshooter/understand.ts`) turns free text into stance (affirm/negate/uncertain/hedged), signals (silence, no-sound, not-working, on-air-unknown), help requests and procedure questions. Flow options declare their meaning (`answer`, `signals`); never go back to first-match phrase lists.
 - **The troubleshooting engine** (`src/lib/troubleshooter/engine.ts`) is pure: `(state, input, context) → (state, commands)`. Keep it free of React, network and time. A future AI should plug in by producing the same `Interpretation`/command shapes.
-- **Application state**: `WorkspaceProvider` (selection, highlight, active view, focus requests) and `TroubleshooterProvider` (conversation) wrap the app in `src/app/layout.tsx`, so state survives navigation.
+- **Application state**: `WorkspaceProvider` (selection, highlight, active view, focus requests) and `TroubleshooterProvider` (conversation) wrap the app in `src/app/layout.tsx`, so state survives navigation. Sessions persist in `sessionStorage` via `src/lib/session/storage.ts`; anything restored must pass `parseConversation` and workspace command validation.
+- **Responsive layout**: below 1280px the Studio Explorer uses a bottom sheet (`EquipmentSheet`); below 1024px the shell uses a compact header and menu. Don't pin elements over interactive content on phones (axe target-size / focus-not-obscured).
 - **Hotspots** use fractional regions (0–1) of the image, so they stay aligned at any size or zoom. Use `regionFromPixels` to convert from pixel measurements.
 - Server components must not import plain values from `"use client"` modules — put shared constants in non-client modules (see `src/lib/knowledge/labels.ts`).
 - Run `validateContent()` (unit-tested, also shown on /admin) after changing any data file.
 
 ## Safety requirements (non-negotiable)
 - Do not invent model numbers, cable connections, settings, specifications or procedures. Record unknowns in `requiresVerification` and `EQUIPMENT.md`.
-- Only the station engineer can make something `verified`; set `lastReviewed` when that happens.
+- Only the station engineer can make something `verified`, and it must carry a `review` record (reviewer, real date, source). `validateContent()` enforces this; never weaken it.
+- Details read from photographs are observations: record them as `draft` with a `source`, never as confirmed facts or instructions.
+- Typed text must never reset a conversation. Clearing only happens through the confirmed **End session** action.
+- Questions about restarting/unplugging equipment get the safe "no approved instructions" reply; never add recovery procedures without verification.
+- Possible silence on air must stay a priority path (see `understand.ts` signals and `outcome-urgent`).
+- Photos must be imported with `scripts/import-photo.mjs` (strips metadata, can blur names on screens).
 - Troubleshooting flows gather information; they must not prescribe fixes unless a verified procedure exists.
 - Every question node needs `unsureNext`; every path must end in an outcome offering technical support. The "no dead ends" test enforces this.
 - The app must never claim a live connection to the studio or present the troubleshooter as a live AI while it is scripted.
@@ -44,7 +51,9 @@ Run `npm run check` before every commit, and `npm run test:e2e` after UI changes
 
 ## Testing expectations
 - Unit tests in `tests/unit` (Vitest + Testing Library, jsdom). `tests/setup.ts` mocks `next/navigation` and `matchMedia` (`media.wide` toggles the troubleshooter's embedded studio).
-- E2E tests in `tests/e2e` run at desktop (1440), tablet (820) and narrow (390) widths.
+- E2E tests in `tests/e2e` run at 1440, 820, 390, 375 and 320px and include axe checks (`accessibility.spec.ts`), touch/mobile (`mobile.spec.ts`), sessions, viewer regressions and the hotspot editor. The Playwright web server sets `RT_ENABLE_HOTSPOT_EDITOR=1`.
+- Playwright reuses a running server on :3100. Stop any old `next start` before running e2e after a rebuild, or tests hit stale JavaScript.
+- Node-environment suites (e.g. `photo-pipeline.test.ts`) must keep working: `tests/setup.ts` guards `window`. Check the **Test Files** count, not just Tests, when reading results.
 - Add a test for every new flow node behaviour, command type or content rule.
 
 ## Git

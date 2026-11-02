@@ -65,10 +65,10 @@ export default async function ArticlePage({ params }: Props) {
           )}
 
           <div className="mt-6 flex flex-col gap-6">
-            {article.sections.map((section) => (
-              <section key={section.heading} aria-labelledby={`s-${section.heading}`}>
+            {article.sections.map((section, index) => (
+              <section key={section.heading} aria-labelledby={`section-${index}`}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 id={`s-${section.heading}`} className="text-lg font-semibold text-ink-50">
+                  <h2 id={`section-${index}`} className="text-lg font-semibold text-ink-50">
                     {section.heading}
                   </h2>
                   <VerificationBadge status={section.status} />

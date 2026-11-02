@@ -478,9 +478,16 @@ function HotspotButton({
       aria-pressed={selected}
       aria-label={`${record.name}${hotspot.placeholder ? " (placeholder position)" : ""}`}
       onClick={onActivate}
-      style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: `${width * 100}%`, height: `${height * 100}%` }}
+      // Positioned by its centre so small items can grow to a minimum target size
+      // (--hit, in screen pixels) without shifting off the equipment.
+      style={{
+        left: `${(x + width / 2) * 100}%`,
+        top: `${(y + height / 2) * 100}%`,
+        width: `max(${width * 100}%, calc(var(--hit) / var(--s)))`,
+        height: `max(${height * 100}%, calc(var(--hit) / var(--s)))`,
+      }}
       className={cn(
-        "group absolute rounded-[calc(8px/var(--s))] border-[calc(1.5px/var(--s))] transition-[background-color,border-color,box-shadow] duration-150 focus-visible:outline-none",
+        "group absolute -translate-x-1/2 -translate-y-1/2 rounded-[calc(8px/var(--s))] border-[calc(1.5px/var(--s))] transition-[background-color,border-color,box-shadow] duration-150 focus-visible:outline-none",
         selected
           ? "border-signal-300 bg-signal-400/15"
           : highlighted
@@ -505,7 +512,8 @@ function HotspotButton({
             : "bg-ink-900/95 text-ink-100 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
         )}
       >
-        {record.shortName.charAt(0).toUpperCase() + record.shortName.slice(1)}
+        {/* Visible label matches the start of the accessible name (WCAG 2.5.3 Label in Name). */}
+        {record.name}
       </span>
     </button>
   );

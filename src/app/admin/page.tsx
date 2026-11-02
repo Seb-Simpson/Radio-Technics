@@ -109,7 +109,8 @@ function AdminTable({ title, caption, headers, rows }: { title: string; caption:
         <h2 className="text-sm font-semibold text-ink-100">{title}</h2>
         <p className="text-[12px] text-ink-400">{caption}</p>
       </div>
-      <div className="overflow-x-auto">
+      {/* Focusable so keyboard users can scroll the table sideways on small screens. */}
+      <div className="overflow-x-auto focus-visible:outline-offset-[-2px]" tabIndex={0} role="region" aria-label={`${title} table`}>
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead>
             <tr className="border-b border-ink-750">

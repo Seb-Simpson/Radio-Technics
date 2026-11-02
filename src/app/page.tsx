@@ -92,7 +92,7 @@ export default function DashboardPage() {
           </dl>
           <p className="border-t border-ink-750 px-4 py-3 text-[13px] leading-relaxed text-ink-400 sm:px-5">
             Counts come from the project&apos;s own records. See{" "}
-            <Link href="/admin" className="text-signal-300 underline-offset-2 hover:underline">
+            <Link href="/admin" className="text-signal-300 underline underline-offset-2 hover:text-signal-400">
               Administration
             </Link>{" "}
             for details.

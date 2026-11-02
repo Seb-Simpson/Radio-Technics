@@ -25,7 +25,7 @@ export function Troubleshooter() {
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
-  const logRef = useRef<HTMLOListElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const focusOptionsNext = useRef(false);
   const [showEmbedded, setShowEmbedded] = useState(false);
@@ -148,17 +148,21 @@ export function Troubleshooter() {
           </div>
         )}
 
-        <ol
+        {/* role="log" sits on a wrapper so the list keeps valid list semantics; it is focusable so keyboard users can scroll it. */}
+        <div
           ref={logRef}
           role="log"
           aria-live="polite"
           aria-label="Conversation"
-          className="flex flex-1 flex-col gap-3 overflow-y-auto scroll-smooth px-4 py-5 sm:px-5"
+          tabIndex={0}
+          className="flex-1 overflow-y-auto scroll-smooth px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5"
         >
-          {conversation.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
-        </ol>
+          <ol className="flex flex-col gap-3">
+            {conversation.messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))}
+          </ol>
+        </div>
 
         <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-4 sm:px-5">
           {showSummary && <SupportSummary text={buildSupportSummary(conversation)} />}
@@ -304,7 +308,7 @@ function SupportSummary({ text }: { text: string }) {
           {status === "copied" ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="max-h-36 overflow-y-auto px-3 py-2 font-sans text-[13px] leading-relaxed whitespace-pre-wrap text-ink-200">{text}</pre>
+      <pre tabIndex={0} aria-label="Summary text" className="max-h-36 overflow-y-auto px-3 py-2 focus-visible:outline-offset-[-2px] font-sans text-[13px] leading-relaxed whitespace-pre-wrap text-ink-200">{text}</pre>
       {status === "failed" && (
         <p role="alert" className="px-3 pb-2 text-[13px] text-alert-300">
           Couldn&apos;t copy automatically. Select the text above and copy it instead.

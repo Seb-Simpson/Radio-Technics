@@ -12,9 +12,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navRef = useRef<HTMLUListElement>(null);
 
   // On narrow screens the nav scrolls sideways: keep the current section visible.
+  // Scroll the list itself — element.scrollIntoView() would move the browser's
+  // sequential focus starting point and make Tab skip the skip link.
   useEffect(() => {
-    const active = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
-    active?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const list = navRef.current;
+    const active = list?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!list || !active || list.scrollWidth <= list.clientWidth) return;
+    const item = active.parentElement ?? active;
+    if (item.offsetLeft < list.scrollLeft || item.offsetLeft + item.offsetWidth > list.scrollLeft + list.clientWidth) {
+      list.scrollLeft = Math.max(0, item.offsetLeft - 12);
+    }
   }, [pathname]);
 
   return (

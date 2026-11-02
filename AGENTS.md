@@ -43,7 +43,8 @@ Keep changes focused. Don't reformat or restructure unrelated files. Don't add d
 6. Never present illustrative images or diagrams as the real studio; never imply the app is connected to, or can control, real equipment.
 7. Any AI integration must emit structured commands that are validated against the allow-list and real content IDs before use.
 8. Never reset a conversation from typed text, never answer "should I restart…?" with a procedure, and keep possible silence on air as an urgent path.
-9. Never commit photos without running them through `scripts/import-photo.mjs`, and never show contact details (e.g. a number seen on a sticker) until the station confirms them.
+9. Never commit photos without running them through `scripts/import-photo.mjs`; redact (not blur) phone numbers and similar, and never show contact details until the station confirms them.
+10. Station-reported operating details (e.g. Myriad 6 in live-assist mode, the green button advancing to the next song) are not procedures. Don't derive instructions from them.
 
 ## Adding studio photographs
 See README → "Adding studio photographs".

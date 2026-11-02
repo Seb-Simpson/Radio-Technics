@@ -22,9 +22,13 @@ Run `npm run check` before every commit, and `npm run test:e2e` after UI changes
 - **Shared types** live in `src/types/index.ts` (domain) and `src/lib/troubleshooter/types.ts` (conversation).
 - **Lookups** go through `src/lib/content/*` and `src/lib/knowledge/search.ts`, which return `undefined` for unknown IDs — always handle that.
 - **Workspace commands** (`src/lib/workspace/commands.ts`) are the only way troubleshooting logic may change the UI. Every command passes `validateWorkspaceCommand` (allow-listed type + real IDs). Do not add command types that touch real equipment, run code, or navigate to arbitrary URLs.
-- **Reply understanding** (`src/lib/troubleshooter/understand.ts`) turns free text into stance (affirm/negate/uncertain/hedged), signals (silence, no-sound, not-working, on-air-unknown), help requests and procedure questions. Flow options declare their meaning (`answer`, `signals`); never go back to first-match phrase lists.
+- **Reply understanding** (`src/lib/troubleshooter/understand.ts`) splits messages into clauses, applies self-corrections (sorry/actually/I mean…), reads stance across clauses (affirm/negate/uncertain/conflict), and extracts claims about sound (`audio`: present/absent) with negation. Flow options declare what they assert (`answer` for this exact question, `audio`). An option may only be chosen if consistent with BOTH stance and observations; otherwise ask again and record nothing. Never go back to first-clause or first-match logic.
+- **Safety before routing**: `handleText` sets `urgent` (confirmed off-air) or `possibleSilence` on the session before handling help requests, procedure questions or answers. Never move that classification after routing.
 - **The troubleshooting engine** (`src/lib/troubleshooter/engine.ts`) is pure: `(state, input, context) → (state, commands)`. Keep it free of React, network and time. A future AI should plug in by producing the same `Interpretation`/command shapes.
 - **Application state**: `WorkspaceProvider` (selection, highlight, active view, focus requests) and `TroubleshooterProvider` (conversation) wrap the app in `src/app/layout.tsx`, so state survives navigation. Sessions persist in `sessionStorage` via `src/lib/session/storage.ts`; anything restored must pass `parseConversation` and workspace command validation.
+- **Selection**: the workspace tracks `selectedEquipmentId` and, separately, `selectedHotspotId` (validated against the equipment). Several hotspots may share one equipment record; the panel shows the chosen hotspot's note.
+- **Sessions** expire two hours after the last USER action (`TroubleshooterProvider` `clock` prop). Saves must never stamp "now"; expiry is enforced before processing input, on an interval and on focus.
+- **Short screens**: use the `tall:` variant (min-height 720px) for fixed-height panels and sticky headers; below it, content must flow and scroll.
 - **Responsive layout**: below 1280px the Studio Explorer uses a bottom sheet (`EquipmentSheet`); below 1024px the shell uses a compact header and menu. Don't pin elements over interactive content on phones (axe target-size / focus-not-obscured).
 - **Hotspots** use fractional regions (0–1) of the image, so they stay aligned at any size or zoom. Use `regionFromPixels` to convert from pixel measurements.
 - Server components must not import plain values from `"use client"` modules — put shared constants in non-client modules (see `src/lib/knowledge/labels.ts`).
@@ -37,7 +41,8 @@ Run `npm run check` before every commit, and `npm run test:e2e` after UI changes
 - Typed text must never reset a conversation. Clearing only happens through the confirmed **End session** action.
 - Questions about restarting/unplugging equipment get the safe "no approved instructions" reply; never add recovery procedures without verification.
 - Possible silence on air must stay a priority path (see `understand.ts` signals and `outcome-urgent`).
-- Photos must be imported with `scripts/import-photo.mjs` (strips metadata, can blur names on screens).
+- Photos must be imported with `scripts/import-photo.mjs` (strips metadata; `--blur` for names on screens, `--redact` for anything that must be unreadable such as phone numbers).
+- Review records and provenance must be meaningful (no TBC/n/a placeholders). Validation cannot prove genuine approval; never claim it does.
 - Troubleshooting flows gather information; they must not prescribe fixes unless a verified procedure exists.
 - Every question node needs `unsureNext`; every path must end in an outcome offering technical support. The "no dead ends" test enforces this.
 - The app must never claim a live connection to the studio or present the troubleshooter as a live AI while it is scripted.

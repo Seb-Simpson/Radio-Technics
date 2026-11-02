@@ -13,7 +13,7 @@ Nothing in this document has been verified by the station engineer. Labels visib
 | `mixing-console` | Main broadcast mixing console | Combines and controls studio sound sources | Unverified | Mixing console, Myriad screen, Eight-fader panel |
 | `presenter-microphone` | Presenter microphone | Picks up the presenter's voice | Unverified | Microphone (assumed to be the presenter's) |
 | `guest-microphones` | Guest microphones | Pick up guests' voices | Unverified | — (console channels Guest 1–3 visible) |
-| `myriad-playout` | Myriad playout software | Plays the station's songs and other audio | Station reported | Myriad screen, Microphone |
+| `myriad-playout` | Myriad playout software | Plays the station's songs and other audio. **Myriad 6, live-assist mode** | Station reported | Myriad screen, Microphone |
 | `green-next-button` | Green Myriad button | **Advances Myriad to the next song** | Station reported | Green button |
 | `zoom-camera` | Zoom call camera | **Used for Zoom video calls** | Station reported | Video camera |
 | `headphone-monitoring` | Headphone monitoring | Lets presenters and guests hear the studio | Unverified | Mixing console (HEADPHONES knob), Green button (edge of photo) |
@@ -34,7 +34,7 @@ The *existence* of each item is station reported.
 - **Speakers:** labelled *MS16 Monitor Speaker* with a Behringer logo; wall-mounted. Two photos — possibly the same speaker.
 - **Meters:** separate unit labelled *Canford Dual PPM*, meters A and B, with peak lights.
 - **Microphones:** a microphone with a MIX 92.6 foam windshield in a shock mount; microphone arms carry numbered markers 1, 2 and 3.
-- **Rack:** units labelled *Axia QOR.16 Integrated Console Engine* and *X-NODE 2 (The Telos Alliance)*; a 14-switch power panel labelled DESK PSU, CD 1, CD 2, MYRIAD MONITOR, PRESENTER MONITOR, MIC LIVE, KVM 4 WAY, MON SPKR LEFT, MON SPKR RIGHT, MINI DISK, GUEST MONITOR, H/P AMP. A sticker shows a phone number. It is **not** shown in the app until the station confirms it.
+- **Rack:** units labelled *Axia QOR.16 Integrated Console Engine* and *X-NODE 2 (The Telos Alliance)*; a 14-switch power panel labelled DESK PSU, CD 1, CD 2, MYRIAD MONITOR, PRESENTER MONITOR, MIC LIVE, KVM 4 WAY, MON SPKR LEFT, MON SPKR RIGHT, MINI DISK, GUEST MONITOR, H/P AMP. A sticker showed a phone number; it has been **redacted** from the served photo and is not shown in the app until the station confirms it.
 - **Screens:** a label reads *"Please do not switch off screens"*.
 
 ## Questions for the station engineer
@@ -54,7 +54,7 @@ The *existence* of each item is station reported.
 
 ### Myriad
 - Confirm the installed version (the screen shows Myriad Playout v6) and which computer runs it.
-- Which play modes do presenters use (Standby, Live, AutoFade), and what does each mean here?
+- What does live-assist mode mean for presenters here, and are the other modes on screen (Standby, AutoFade) ever used?
 - Can presenters also advance to the next song from the Myriad screen? If so, how?
 
 ### Green button

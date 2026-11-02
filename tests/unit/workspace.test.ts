@@ -53,7 +53,7 @@ describe("workspace reducer", () => {
   it("highlights equipment, switches to a view showing it and requests focus", () => {
     const state = workspaceReducer(initialWorkspaceState, { type: "highlight_equipment", equipmentId: "green-next-button" });
     expect(state.highlightedEquipmentId).toBe("green-next-button");
-    expect(state.activeViewId).toBe("demo-layout");
+    expect(state.activeViewId).toBe("green-button");
     expect(state.focusRequest).toEqual({ equipmentId: "green-next-button", token: 1 });
     const again = workspaceReducer(state, { type: "highlight_equipment", equipmentId: "green-next-button" });
     expect(again.focusRequest?.token).toBe(2);

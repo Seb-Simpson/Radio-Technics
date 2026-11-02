@@ -23,6 +23,8 @@ export type VerificationStatus = "verified" | "station-reported" | "draft";
 export interface Fact {
   text: string;
   status: VerificationStatus;
+  /** Where the information came from (e.g. a photograph or a station message). */
+  source?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -108,6 +110,10 @@ export interface Hotspot {
   region: HotspotRegion;
   /** True when the position has not been checked against a real photograph. */
   placeholder: boolean;
+  /** Whether the station has confirmed that this hotspot shows this equipment record. */
+  identity: VerificationStatus;
+  /** How the item was identified, or what is uncertain about it. */
+  note?: string;
 }
 
 /* ------------------------------------------------------------------ */

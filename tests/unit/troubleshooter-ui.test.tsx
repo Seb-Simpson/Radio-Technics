@@ -49,7 +49,8 @@ describe("Troubleshooter UI", () => {
         <Troubleshooter />
       </>,
     );
-    await user.click(screen.getByRole("button", { name: /^Green Myriad button \(placeholder/ }));
+    await user.click(screen.getByRole("tab", { name: "Green button" }));
+    await user.click(within(screen.getByRole("group", { name: /^Green button/ })).getByRole("button", { name: "Green Myriad button" }));
     expect(screen.getByText("Selected in Studio Explorer:")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Describe the problem"), "It's not working{Enter}");
     expect(
@@ -78,11 +79,13 @@ describe("Troubleshooter UI", () => {
     renderWithProviders(<Troubleshooter />);
     const workspace = await screen.findByRole("region", { name: "Studio workspace" });
     await user.type(screen.getByLabelText("Describe the problem"), "It's not doing anything{Enter}");
-    await user.click(within(workspace).getByRole("button", { name: /^Zoom video camera \(placeholder/ }));
+    await user.click(within(workspace).getByRole("tab", { name: "Video camera" }));
+    await user.click(within(workspace).getByRole("button", { name: "Zoom call camera" }));
     await user.click(within(workspace).getByRole("button", { name: "Use in troubleshooter" }));
-    expect(within(log()).getByText("What's happening with the video camera?")).toBeInTheDocument();
+    expect(within(log()).getByText("What's happening with the Zoom camera?")).toBeInTheDocument();
     // Mid-question, selecting other equipment must not silently restart the flow.
-    await user.click(within(workspace).getByRole("button", { name: /^Equipment rack|^Technical equipment rack \(placeholder/ }));
+    await user.click(within(workspace).getByRole("tab", { name: "Equipment rack" }));
+    await user.click(within(workspace).getAllByRole("button", { name: "Technical equipment rack" })[0]!);
     expect(within(workspace).queryByRole("button", { name: "Use in troubleshooter" })).not.toBeInTheDocument();
   });
 

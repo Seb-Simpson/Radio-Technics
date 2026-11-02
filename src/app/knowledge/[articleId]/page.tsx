@@ -65,10 +65,10 @@ export default async function ArticlePage({ params }: Props) {
           )}
 
           <div className="mt-6 flex flex-col gap-6">
-            {article.sections.map((section) => (
-              <section key={section.heading} aria-labelledby={`s-${section.heading}`}>
+            {article.sections.map((section, index) => (
+              <section key={section.heading} aria-labelledby={`section-${index}`}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 id={`s-${section.heading}`} className="text-lg font-semibold text-ink-50">
+                  <h2 id={`section-${index}`} className="text-lg font-semibold text-ink-50">
                     {section.heading}
                   </h2>
                   <VerificationBadge status={section.status} />
@@ -94,7 +94,9 @@ export default async function ArticlePage({ params }: Props) {
           <div className="rounded-xl border border-ink-750 bg-ink-900 p-4">
             <h2 className="text-sm font-semibold text-ink-100">Review status</h2>
             <p className="mt-1 text-[13px] text-ink-400">
-              {article.lastReviewed ? `Last reviewed by the engineer on ${article.lastReviewed}.` : "Not yet reviewed by the station engineer."}
+              {article.review
+                ? `Reviewed by ${article.review.reviewer} on ${article.review.date} (${article.review.source}).`
+                : "Not yet reviewed by the station engineer."}
             </p>
           </div>
           {relatedEquipment.length > 0 && (

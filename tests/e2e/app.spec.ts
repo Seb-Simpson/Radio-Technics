@@ -25,8 +25,11 @@ async function expectNoHorizontalScroll(page: Page) {
 test("main navigation reaches every section without errors", async ({ page }) => {
   const errors = await collectErrors(page);
   await page.goto("/");
+  const menu = page.getByRole("button", { name: "Menu" });
   for (const section of sections) {
-    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: section.label }).click();
+    // Phones and tablets use the compact menu; large screens the sidebar.
+    if (await menu.isVisible()) await menu.click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: new RegExp(`^${section.label}`) }).click();
     await expect(page).toHaveURL(new RegExp(`${section.path === "/" ? "/$" : section.path}$`));
     await expect(page.getByRole("heading", { level: 1, name: section.heading })).toBeVisible();
     await expectNoHorizontalScroll(page);
@@ -36,7 +39,8 @@ test("main navigation reaches every section without errors", async ({ page }) =>
 
 test("selecting a hotspot shows equipment details", async ({ page }) => {
   await page.goto("/studio");
-  await page.getByRole("button", { name: /^Green Myriad button \(placeholder/ }).click();
+  await page.getByRole("tab", { name: "Green button" }).click();
+  await page.getByRole("group", { name: /^Green button/ }).getByRole("button", { name: "Green Myriad button" }).click();
   const panel = page.getByRole("complementary", { name: "Selected equipment" });
   await expect(panel.getByRole("heading", { name: "Green Myriad button" })).toBeVisible();
   await expect(panel.getByText("Advances Myriad to the next song.", { exact: true })).toBeVisible();
@@ -49,7 +53,7 @@ test("zoom controls work and dragging pans without selecting", async ({ page }) 
   await page.getByRole("button", { name: "Zoom in" }).click();
   await expect(zoom).toHaveText("196%");
 
-  const console = page.getByRole("button", { name: /^Main broadcast mixing console \(placeholder/ });
+  const console = page.getByRole("group", { name: /^Mixing console/ }).getByRole("button", { name: "Main broadcast mixing console" });
   const box = (await console.boundingBox())!;
   const stage = page.getByTestId("viewer-stage");
   const before = await stage.evaluate((el) => getComputedStyle(el).transform);
@@ -58,7 +62,8 @@ test("zoom controls work and dragging pans without selecting", async ({ page }) 
   await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 10, { steps: 6 });
   await page.mouse.up();
   await expect.poll(() => stage.evaluate((el) => getComputedStyle(el).transform)).not.toBe(before);
-  await expect(page.getByText("Select a piece of equipment")).toBeVisible();
+  // The drag must not have selected anything (side panel on desktop, sheet on smaller screens).
+  await expect(page.getByRole("heading", { level: 2, name: "Main broadcast mixing console" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Reset zoom" }).click();
   await expect(zoom).toHaveText("100%");
@@ -66,7 +71,7 @@ test("zoom controls work and dragging pans without selecting", async ({ page }) 
 
 test("keyboard users can reach hotspots and see focus", async ({ page }) => {
   await page.goto("/studio");
-  const viewer = page.getByRole("group", { name: /Illustrative layout/ });
+  const viewer = page.getByRole("group", { name: /^Mixing console/ });
   await viewer.focus();
   await page.keyboard.press("+");
   await expect(page.getByRole("status", { name: "Zoom level" })).toHaveText("140%");
@@ -93,12 +98,12 @@ test("troubleshooter clarifies, then highlights equipment in the studio", async 
   if (wide) {
     // Embedded workspace beside the chat.
     const workspace = page.getByRole("region", { name: "Studio workspace" });
-    await expect(workspace.getByRole("button", { name: /^Myriad playout software \(placeholder/ })).toHaveAttribute("data-highlighted", "true");
+    await expect(workspace.getByRole("group", { name: /^Myriad screen/ }).getByRole("button", { name: "Myriad playout software" })).toHaveAttribute("data-highlighted", "true");
     await expect(page).toHaveURL(/\/troubleshooter$/);
   } else {
     await expect(page).toHaveURL(/\/studio$/);
-    await expect(page.getByRole("button", { name: /^Myriad playout software \(placeholder/ })).toHaveAttribute("data-highlighted", "true");
-    await page.getByRole("link", { name: "Back to troubleshooter" }).click();
+    await expect(page.getByRole("group", { name: /^Myriad screen/ }).getByRole("button", { name: "Myriad playout software" })).toHaveAttribute("data-highlighted", "true");
+    await page.getByRole("link", { name: "Back to conversation" }).first().click();
     await expect(page.getByRole("log").getByText("What happened on the Myriad screen after you pressed the green button?")).toBeVisible();
   }
   await expectNoHorizontalScroll(page);
@@ -124,4 +129,15 @@ test("unknown pages show a helpful not-found page", async ({ page }) => {
   const response = await page.goto("/knowledge/not-a-real-article");
   expect(response?.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "We couldn't find that page" })).toBeVisible();
+});
+
+test("web app manifest and icons are served", async ({ request }) => {
+  const response = await request.get("/manifest.webmanifest");
+  expect(response.ok()).toBe(true);
+  const manifest = await response.json();
+  expect(manifest).toMatchObject({ name: "Radio Technics", display: "standalone", start_url: "/" });
+  for (const icon of manifest.icons as { src: string }[]) {
+    expect((await request.get(icon.src)).ok(), icon.src).toBe(true);
+  }
+  expect((await request.get("/apple-icon.png")).ok()).toBe(true);
 });

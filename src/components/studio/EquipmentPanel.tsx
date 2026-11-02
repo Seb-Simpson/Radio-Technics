@@ -7,6 +7,7 @@ import { buttonStyles } from "@/components/ui/button-styles";
 import { VerificationBadge } from "@/components/ui/VerificationBadge";
 import { getCategory, getEquipmentById } from "@/lib/content/equipment";
 import { getArticleById } from "@/lib/knowledge/search";
+import type { Hotspot } from "@/types";
 
 export interface EquipmentPanelProps {
   equipmentId: string | null;
@@ -16,6 +17,8 @@ export interface EquipmentPanelProps {
   troubleshootLabel?: string;
   /** Whether the equipment appears in the current view. */
   inCurrentView?: boolean;
+  /** The hotspot for this equipment in the photo on screen, if any. */
+  photoHotspot?: Hotspot | null;
 }
 
 export function EquipmentPanel({
@@ -24,6 +27,7 @@ export function EquipmentPanel({
   onTroubleshoot,
   troubleshootLabel = "Troubleshoot this",
   inCurrentView = true,
+  photoHotspot = null,
 }: EquipmentPanelProps) {
   const record = getEquipmentById(equipmentId);
 
@@ -91,6 +95,16 @@ export function EquipmentPanel({
           </div>
           <p className="mt-1.5 text-[15px] font-medium text-ink-50">{record.primaryFunction.text}</p>
         </div>
+
+        {photoHotspot?.note && (
+          <div className="flex flex-col items-start gap-1.5 rounded-lg border border-dashed border-ink-600 px-3 py-2.5">
+            <p className="text-[13px] leading-relaxed text-ink-200">
+              <span className="font-medium text-ink-100">In this photo: </span>
+              {photoHotspot.note}
+            </p>
+            <VerificationBadge status={photoHotspot.identity} />
+          </div>
+        )}
 
         {onTroubleshoot && (
           <button type="button" onClick={() => onTroubleshoot(record.id)} className={buttonStyles({ variant: "primary", className: "w-full" })}>

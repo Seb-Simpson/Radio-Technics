@@ -192,7 +192,8 @@ describe("safety and robustness", () => {
     const before = state.step;
     ({ state } = say(state, "purple monkey dishwasher"));
     expect(state.step).toEqual(before);
-    expect(lastAssistant(state)).toMatch(/didn't understand/);
+    expect(state.messages.some((m) => m.role === "assistant" && /noted that/.test(m.text))).toBe(true);
+    expect(state.observations.at(-1)?.text).toBe("purple monkey dishwasher");
   });
 
   it("handles stale option IDs and empty input", () => {
@@ -207,9 +208,18 @@ describe("safety and robustness", () => {
     expect(describeStep(state).help).toMatch(/don't plug in or move cables/);
   });
 
-  it("restarts on request", () => {
+  it("typed 'start again' explains the button instead of clearing the conversation", () => {
     const { state } = say(createConversation(), "I can't hear anything");
-    expect(say(state, "start again").state.step).toEqual({ kind: "start" });
+    const after = say(state, "start again").state;
+    expect(after.step).toEqual(state.step);
+    expect(after.observations.map((o) => o.text)).toContain("I can't hear anything");
+    expect(lastAssistant(after)).toMatch(/End session/);
+  });
+
+  it("only the explicit restart option clears the conversation", () => {
+    let { state } = say(createConversation(), "I can't hear anything");
+    ({ state } = choose(state, "I need technical support"));
+    expect(choose(state, "Start a new problem").state.step).toEqual({ kind: "start" });
   });
 
   it("only ever emits valid workspace commands", () => {

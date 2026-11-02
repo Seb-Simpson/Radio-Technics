@@ -16,8 +16,9 @@
   --color-ink-700: #263036;
   --color-ink-600: #344049;
   --color-ink-500: #4a5862;
-  --color-ink-400: #6d7c86;
-  --color-ink-300: #93a1aa;
+  /* ink-400 is the lightest secondary text colour: ≥4.5:1 on every surface down to ink-700. */
+  --color-ink-400: #8a99a3;
+  --color-ink-300: #a9b5bc;
   --color-ink-200: #bcc6cc;
   --color-ink-100: #dfe5e8;
   --color-ink-50: #f1f4f5;
@@ -37,6 +38,16 @@
   --color-alert-900: #3d1915;
 
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Minimum hotspot target size in screen pixels: WCAG 2.2 AA minimum, larger for touch. */
+:root {
+  --hit: 24px;
+}
+@media (pointer: coarse) {
+  :root {
+    --hit: 40px;
+  }
 }
 
 @layer base {

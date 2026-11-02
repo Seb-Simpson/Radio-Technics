@@ -2,14 +2,17 @@
 
 An interactive studio explorer and troubleshooting assistant for radio presenters.
 
-> **Status: Phase RT-001 prototype.** Demonstration data only. Not connected to any studio equipment. The troubleshooter follows scripted conversations — it is not a live AI. No information has been verified by the station engineer yet.
+> **Status: Phase RT-002 prototype.** Not connected to any studio equipment. The troubleshooter follows scripted conversations — it is not a live AI. No information has been verified by the station engineer yet.
 
 ## Current functionality
 - **Dashboard** — quick actions, common problems, equipment shortcuts, honest setup progress.
-- **Studio Explorer** — zoomable, pannable studio view (mouse, touch, pinch, keyboard) with clickable equipment hotspots, hover/selected/highlighted states and an equipment detail panel. Until real photographs are added it shows a clearly labelled *illustrative layout* with placeholder hotspots.
-- **Troubleshooter** — scripted, deterministic conversations that clarify vague descriptions ("it's not doing anything", "the green thing isn't working"), ask one question at a time, and always offer *I'm not sure*, *Show me where* and *I need technical support*. "Show me where" highlights equipment in the studio view (beside the chat on wide screens; opens the Studio Explorer on smaller ones). Ends with a copyable summary for technical support.
-- **Knowledge Centre** — searchable equipment guides, troubleshooting articles and help topics, each with verification status.
-- **Administration** — read-only content records and a live content-integrity check. No editing until authentication exists.
+- **Studio Explorer** — the station's ten real photographs (thumbnail tabs), each zoomable and pannable by mouse, touch, pinch or keyboard, with clickable equipment hotspots. On phones and tablets, selected equipment opens in a compact bottom sheet. Hotspot identifications are marked unverified until the engineer confirms them. A clearly labelled illustrative drawing is used only if no photographs are configured.
+- **Troubleshooter** — scripted, deterministic conversations. Typed replies are understood structurally (yes / no / not sure, hedged answers, observations such as silence, requests for help, questions about restarting equipment), and contradictions get a clarifying question instead of a guess. Every question offers *I'm not sure*, *Show me where* and *I need technical support*. Possible silence on air is escalated. Ends with a copyable summary that keeps the presenter's own words.
+- **Sessions** — a conversation survives a page refresh within the same browser tab, expires after two hours idle, and can be cleared with **End session**.
+- **Knowledge Centre** — searchable guides and help topics, each showing its verification status.
+- **Administration** — read-only content records and a live content-integrity check.
+- **Hotspot editor (developers only)** — `/dev/hotspots`, for placing hotspots on photographs. Not available in production builds.
+- **Installable** — web app manifest and icons, so it can be added to a phone's home screen. It does **not** work offline yet.
 
 ## Requirements
 - Node.js 20.9 or newer (developed on Node 22)
@@ -28,7 +31,7 @@ Open http://localhost:3000.
 | `npm run build` / `npm start` | Production build / serve it |
 | `npm run typecheck` | Strict TypeScript check |
 | `npm test` | Unit and component tests (Vitest) |
-| `npm run test:e2e` | Browser tests at desktop, tablet and phone widths (Playwright). Run `npm run build` first. If Playwright's browser isn't installed, run `npx playwright install chromium`. |
+| `npm run test:e2e` | Browser tests (Playwright) at 1440, 820, 390, 375 and 320px, including axe accessibility checks and touch tests. Run `npm run build` first. If Playwright's browser isn't installed, run `npx playwright install chromium`. |
 | `npm run check` | Typecheck + unit tests + build |
 
 ## Project structure
@@ -55,40 +58,25 @@ tests/
 ```
 
 ## Adding studio photographs
-1. Copy the photograph into `public/studio/photos/`, e.g. `public/studio/photos/studio-desk.jpg`. Resize to around 2400px on the long edge and remove location metadata.
-2. Add a record to `studioPhotos` in `src/data/studio-views.ts`:
-   ```ts
-   {
-     id: "studio-desk",
-     title: "Presenter desk",
-     description: "View from the presenter's chair.",
-     kind: "photo",
-     src: "/studio/photos/studio-desk.jpg",
-     width: 2400,   // the image's real pixel size
-     height: 1600,
-     alt: "Presenter desk with mixing console and screens",
-     illustrative: false,
-   }
+1. **Import** the photo. This applies the camera's orientation, removes all metadata (including GPS location), caps the size at 2400px and can blur sensitive areas such as a logged-in name on a screen:
+   ```bash
+   node scripts/import-photo.mjs ~/Downloads/IMG_1234.jpg presenter-desk
+   node scripts/import-photo.mjs ~/Downloads/IMG_1235.jpg myriad-screen --blur 215,423,125,20
    ```
-   As soon as at least one photo exists, the illustrative layout is no longer shown.
-3. Add hotspots in `src/data/hotspots.ts`, measuring rectangles in image pixels:
-   ```ts
-   {
-     id: "studio-desk-green-button",
-     viewId: "studio-desk",
-     equipmentId: "green-next-button",
-     region: regionFromPixels({ width: 2400, height: 1600 }, { left: 1810, top: 1120, right: 1930, bottom: 1220 }),
-     placeholder: false,
-   }
-   ```
-   One equipment record can have hotspots in several photographs.
-4. Run `npm test` — the content-integrity test catches unknown IDs and regions outside the image.
+   It writes `public/studio/photos/<id>.jpg` and prints the real width and height.
+2. **Register** it in `studioPhotos` in `src/data/studio-views.ts` with the `photo(...)` helper (id, title, description, alt text, width, height).
+3. **Place hotspots** with the developer editor: run `npm run dev`, open http://localhost:3000/dev/hotspots, choose the photo (or open a local file to try it first), pick the equipment and drag to draw. Regions can be moved, resized with the corner handles or arrow keys, and checked with *Preview in viewer*. Copy the generated lines into `photoHotspots` in `src/data/hotspots.ts`.
+4. Run `npm test`. The content-integrity tests reject unknown IDs, invalid geometry and photos that still contain metadata.
 
-## Limitations (RT-001)
-- No real studio photographs yet; hotspot positions are placeholders on an illustrative drawing.
-- Troubleshooter uses keyword matching and scripted flows, not AI.
-- No engineer-verified information or procedures; technical-support contact details not yet provided.
-- No authentication, editing or persistence; conversation and selection reset on page reload.
+New hotspots are recorded with `identity: "draft"`. Only change that to `verified` with a `review` record once the engineer has confirmed the item.
+
+## Limitations (RT-002)
+- Troubleshooter uses deterministic understanding and scripted flows, not AI.
+- No engineer-verified information or procedures yet; technical-support contact details have not been provided.
+- Hotspot positions were placed from the photographs by the development team; which equipment each one shows is unconfirmed.
+- No authentication or editing. Sessions are kept only in the current browser tab.
+- No offline support (no service worker).
+- Tested in Chromium with emulated phones and touch; not yet tested on physical iPhones or Android devices.
 - Not deployed.
 
 See `PHASE_STATUS.md` for details and `ROADMAP.md` for next steps.

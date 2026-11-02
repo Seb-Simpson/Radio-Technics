@@ -11,7 +11,8 @@ const log = () => screen.getByRole("log", { name: "Conversation" });
 describe("Troubleshooter UI", () => {
   it("is clearly labelled as a prototype", () => {
     renderWithProviders(<Troubleshooter />);
-    expect(screen.getByText("Scripted responses — not a live AI")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "P" && el.textContent === "Scripted responses — not a live AI")).toBeInTheDocument();
+    expect(screen.getByText("Prototype")).toBeInTheDocument();
   });
 
   it("asks for clarification when the description is vague", async () => {
@@ -49,7 +50,8 @@ describe("Troubleshooter UI", () => {
         <Troubleshooter />
       </>,
     );
-    await user.click(screen.getByRole("button", { name: /^Green Myriad button \(placeholder/ }));
+    await user.click(screen.getByRole("tab", { name: "Green button" }));
+    await user.click(within(screen.getByRole("group", { name: /^Green button/ })).getByRole("button", { name: "Green Myriad button" }));
     expect(screen.getByText("Selected in Studio Explorer:")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Describe the problem"), "It's not working{Enter}");
     expect(
@@ -78,11 +80,13 @@ describe("Troubleshooter UI", () => {
     renderWithProviders(<Troubleshooter />);
     const workspace = await screen.findByRole("region", { name: "Studio workspace" });
     await user.type(screen.getByLabelText("Describe the problem"), "It's not doing anything{Enter}");
-    await user.click(within(workspace).getByRole("button", { name: /^Zoom video camera \(placeholder/ }));
+    await user.click(within(workspace).getByRole("tab", { name: "Video camera" }));
+    await user.click(within(workspace).getByRole("button", { name: "Zoom call camera" }));
     await user.click(within(workspace).getByRole("button", { name: "Use in troubleshooter" }));
-    expect(within(log()).getByText("What's happening with the video camera?")).toBeInTheDocument();
+    expect(within(log()).getByText("What's happening with the Zoom camera?")).toBeInTheDocument();
     // Mid-question, selecting other equipment must not silently restart the flow.
-    await user.click(within(workspace).getByRole("button", { name: /^Equipment rack|^Technical equipment rack \(placeholder/ }));
+    await user.click(within(workspace).getByRole("tab", { name: "Equipment rack" }));
+    await user.click(within(workspace).getAllByRole("button", { name: "Technical equipment rack" })[0]!);
     expect(within(workspace).queryByRole("button", { name: "Use in troubleshooter" })).not.toBeInTheDocument();
   });
 
@@ -101,5 +105,45 @@ describe("Troubleshooter UI", () => {
     await user.click(screen.getByRole("button", { name: "I need technical support" }));
     expect(screen.getByRole("heading", { name: "Summary for technical support" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go back to my last question" })).toBeInTheDocument();
+  });
+
+  it("asks for confirmation before clearing, and 'Keep' keeps everything", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    expect(screen.getByRole("button", { name: "End session" })).toBeDisabled();
+    await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+    await user.click(screen.getByRole("button", { name: "End session" }));
+    const dialog = screen.getByRole("alertdialog", { name: "End this session?" });
+    expect(within(dialog).getByRole("button", { name: "Keep session" })).toHaveFocus();
+    await user.click(within(dialog).getByRole("button", { name: "Keep session" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(within(log()).getByText("the green thing isn't working")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "End session" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "End session" }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "End session" }));
+    expect(within(log()).queryByText("the green thing isn't working")).not.toBeInTheDocument();
+  });
+
+  it("typing a question about restarting doesn't clear the conversation", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    const input = screen.getByLabelText("Describe the problem");
+    await user.type(input, "the green thing isn't working{Enter}");
+    await user.type(input, "Should I restart the computer?{Enter}");
+    expect(within(log()).getByText("the green thing isn't working")).toBeInTheDocument();
+    expect(within(log()).getByText(/don't restart, unplug or reset equipment/)).toBeInTheDocument();
+  });
+
+  it("the end-of-conversation restart also needs confirmation", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Troubleshooter />);
+    await user.type(screen.getByLabelText("Describe the problem"), "dead air{Enter}");
+    await user.click(screen.getByRole("button", { name: "Start a new problem" }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(within(log()).getByText("dead air")).toBeInTheDocument();
   });
 });

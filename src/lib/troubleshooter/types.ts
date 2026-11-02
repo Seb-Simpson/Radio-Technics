@@ -1,4 +1,5 @@
 import type { WorkspaceCommand } from "@/lib/workspace/commands";
+import type { Signal } from "./understand";
 
 /* ------------------------------------------------------------------ */
 /* Static flow content                                                 */
@@ -9,7 +10,14 @@ export interface FlowOption {
   label: string;
   /** Node to move to when chosen. */
   next: string;
-  /** Extra lower-case phrases that count as choosing this option when typed. */
+  /**
+   * What this option means as a reply to a yes/no question. Typed replies
+   * are only mapped to an option whose meaning agrees with the user's stance.
+   */
+  answer?: "yes" | "no";
+  /** Observations this option represents (e.g. silence), used to understand typed replies. */
+  signals?: Signal[];
+  /** Specific lower-case phrases that identify this option when typed (negated mentions are ignored). */
   match?: string[];
   /** Switch the conversation's equipment context when chosen. */
   setEquipmentId?: string;
@@ -33,6 +41,8 @@ export interface FlowNode {
   unsureNext?: string;
   /** Marks outcomes that need urgent attention (e.g. possible silence on air). */
   urgent?: boolean;
+  /** The question is about whether the broadcast is silent. */
+  broadcastCheck?: boolean;
 }
 
 export interface TroubleshootingTopic {
@@ -66,9 +76,22 @@ export interface ChatMessage {
   urgent?: boolean;
 }
 
+/** A diagnostic answer: a button choice, or a typed reply mapped to an option. */
 export interface AnsweredQuestion {
   question: string;
   answer: string;
+  source: "button" | "typed";
+  /** `uncertain` for "I'm not sure", hedged replies and inferred answers. */
+  certainty: "confirmed" | "uncertain";
+  /** Verbatim text when the answer was typed. */
+  typedText?: string;
+}
+
+/** Something the user typed, kept word-for-word for technical support. */
+export interface Observation {
+  text: string;
+  /** The question on screen when it was typed, if any. */
+  inReplyTo: string | null;
 }
 
 export interface ConversationState {
@@ -76,8 +99,12 @@ export interface ConversationState {
   /** Equipment the conversation is currently about, once identified. */
   equipmentId: string | null;
   messages: ChatMessage[];
-  /** Question/answer log, used for the technical-support summary. */
+  /** Diagnostic answers (button choices and interpreted replies). */
   answers: AnsweredQuestion[];
+  /** Everything the user typed, verbatim, separate from diagnostic answers. */
+  observations: Observation[];
+  /** Set once possible silence on air has been reported. Never cleared automatically. */
+  urgent: boolean;
   /** Monotonic counter for message IDs (keeps the engine pure and deterministic). */
   seq: number;
 }

@@ -11,7 +11,12 @@ export default function StudioPage() {
       <PageHeader
         eyebrow="Studio Explorer"
         title="Explore the studio"
-        description="Select equipment to see what it does, problems people report, and what still needs confirming. Drag to move around, and scroll or pinch to zoom."
+        description={
+          <>
+            Select equipment to see what it does and what still needs confirming.
+            <span className="max-sm:sr-only"> Drag to move around, and scroll or pinch to zoom.</span>
+          </>
+        }
       />
       <StudioExplorer />
     </PageContainer>

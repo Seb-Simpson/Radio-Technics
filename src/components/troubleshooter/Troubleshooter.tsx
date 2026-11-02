@@ -2,6 +2,7 @@
 
 import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, RotateCcw, SendHorizontal, TriangleAlert, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { ConfirmClear } from "./ConfirmClear";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { getEquipmentById } from "@/lib/content/equipment";
@@ -20,11 +21,11 @@ const universalIcons: Record<string, typeof CircleHelp> = {
 };
 
 export function Troubleshooter() {
-  const { conversation, send, restart } = useTroubleshooter();
+  const { conversation, send, endSession, restored, dismissRestored } = useTroubleshooter();
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
-  const logRef = useRef<HTMLOListElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const focusOptionsNext = useRef(false);
   const [showEmbedded, setShowEmbedded] = useState(false);
@@ -55,14 +56,46 @@ export function Troubleshooter() {
   // Keep the newest message in view and move keyboard focus to the new options.
   useEffect(() => {
     const log = logRef.current;
-    if (log) log.scrollTop = log.scrollHeight;
+    if (log && log.scrollHeight > log.clientHeight + 1) {
+      // Wide layout: the log scrolls internally.
+      log.scrollTop = log.scrollHeight;
+    } else if (log && conversation.messages.length > 1) {
+      // Phones/tablets: the page scrolls. Bring the newest message into view below the header.
+      const last = log.querySelector("li:last-child");
+      const top = last ? last.getBoundingClientRect().top : 0;
+      if (last && (top < 72 || top > window.innerHeight - 240)) {
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo?.({ top: window.scrollY + top - 80, behavior: reduce ? "auto" : "smooth" });
+      }
+    }
     if (focusOptionsNext.current) {
       focusOptionsNext.current = false;
       optionsRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
     }
   }, [conversation.messages.length]);
 
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const clearButtonRef = useRef<HTMLButtonElement>(null);
+  const hasContent = conversation.messages.some((m) => m.role === "user");
+
+  const requestClear = () => {
+    if (!hasContent) return;
+    setConfirmingClear(true);
+  };
+  const cancelClear = () => {
+    setConfirmingClear(false);
+    clearButtonRef.current?.focus();
+  };
+  const confirmClear = () => {
+    setConfirmingClear(false);
+    endSession();
+  };
+
   const choose = (option: StepOption) => {
+    if (option.kind === "restart") {
+      requestClear();
+      return;
+    }
     focusOptionsNext.current = true;
     send({ type: "option", optionId: option.id });
   };
@@ -86,20 +119,49 @@ export function Troubleshooter() {
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section
         aria-label="Troubleshooting conversation"
-        className="flex min-h-[min(640px,calc(100dvh-12rem))] flex-col overflow-hidden rounded-xl border border-ink-750 bg-ink-900 xl:h-[calc(100dvh-11rem)]"
+        // Phones/tablets: the conversation flows with the page so it gets the whole screen.
+        className="flex flex-col overflow-clip rounded-xl border border-ink-750 bg-ink-900 xl:h-[calc(100dvh-11rem)]"
       >
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-750 px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <span className="rounded border border-caution-400/30 bg-caution-900/40 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wider text-caution-300 uppercase">
               Prototype
             </span>
-            <p className="text-sm text-ink-300">Scripted responses — not a live AI</p>
+            <p className="text-sm text-ink-300">
+              Scripted <span className="max-sm:hidden">responses </span>— not a live AI
+            </p>
           </div>
-          <button type="button" onClick={restart} className={buttonStyles({ variant: "ghost", size: "sm" })}>
+          <button
+            ref={clearButtonRef}
+            type="button"
+            onClick={requestClear}
+            disabled={!hasContent}
+            aria-expanded={confirmingClear}
+            className={buttonStyles({ variant: "ghost", size: "sm" })}
+          >
             <RotateCcw aria-hidden className="size-3.5" />
-            Start again
+            End session
           </button>
         </header>
+
+        {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
+
+        {restored && !confirmingClear && (
+          <div role="status" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
+            <p className="text-ink-200">
+              Your conversation from earlier in this browser tab has been restored. It is cleared when the tab is closed, after two hours
+              without use, or when you choose <span className="font-medium text-ink-50">End session</span>.
+            </p>
+            <button
+              type="button"
+              onClick={dismissRestored}
+              aria-label="Dismiss restored conversation message"
+              className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </div>
+        )}
 
         {selected && (
           <div className="flex items-center justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2 text-[13px] sm:px-5">
@@ -117,26 +179,30 @@ export function Troubleshooter() {
           </div>
         )}
 
-        <ol
+        {/* role="log" sits on a wrapper so the list keeps valid list semantics; it is focusable so keyboard users can scroll it. */}
+        <div
           ref={logRef}
           role="log"
           aria-live="polite"
           aria-label="Conversation"
-          className="flex flex-1 flex-col gap-3 overflow-y-auto scroll-smooth px-4 py-5 sm:px-5"
+          tabIndex={0}
+          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:flex-1 xl:overflow-y-auto xl:scroll-smooth"
         >
-          {conversation.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
-        </ol>
+          <ol className="flex flex-col gap-3">
+            {conversation.messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))}
+          </ol>
+        </div>
 
-        <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-4 sm:px-5">
+        <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-3 sm:px-5">
           {showSummary && <SupportSummary text={buildSupportSummary(conversation)} />}
 
           <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses">
             {answerOptions.length > 0 && (
               <div
                 className={cn(
-                  "grid max-h-[38dvh] gap-2 overflow-y-auto",
+                  "grid gap-2 xl:max-h-[38dvh] xl:overflow-y-auto",
                   (step.kind === "start" || answerOptions.length > 4) && "sm:grid-cols-2",
                 )}
               >
@@ -174,7 +240,14 @@ export function Troubleshooter() {
             )}
           </div>
 
-          <form onSubmit={submit} className="mt-3">
+        </div>
+
+          <form
+            onSubmit={submit}
+            // Not sticky on phones: a pinned box would cover answer buttons (WCAG 2.4.11 / 2.5.8).
+            // Focusing it brings it above the on-screen keyboard.
+            className="scroll-mb-4 border-t border-ink-750 bg-ink-900 px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 xl:pb-4"
+          >
             <label htmlFor="troubleshooter-input" className="sr-only">
               Describe the problem
             </label>
@@ -189,7 +262,7 @@ export function Troubleshooter() {
                   if (inputError) setInputError(null);
                 }}
                 onKeyDown={onKeyDown}
-                placeholder="Describe the problem in your own words…"
+                placeholder="Describe the problem…"
                 aria-invalid={inputError ? true : undefined}
                 aria-describedby={inputError ? "troubleshooter-input-error" : undefined}
                 className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-[15px] text-ink-50 placeholder:text-ink-400 focus:outline-none"
@@ -204,7 +277,6 @@ export function Troubleshooter() {
               </p>
             )}
           </form>
-        </div>
       </section>
 
       {showEmbedded && (
@@ -273,7 +345,7 @@ function SupportSummary({ text }: { text: string }) {
           {status === "copied" ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="max-h-36 overflow-y-auto px-3 py-2 font-sans text-[13px] leading-relaxed whitespace-pre-wrap text-ink-200">{text}</pre>
+      <pre tabIndex={0} aria-label="Summary text" className="max-h-36 overflow-y-auto px-3 py-2 focus-visible:outline-offset-[-2px] font-sans text-[13px] leading-relaxed whitespace-pre-wrap text-ink-200">{text}</pre>
       {status === "failed" && (
         <p role="alert" className="px-3 pb-2 text-[13px] text-alert-300">
           Couldn&apos;t copy automatically. Select the text above and copy it instead.

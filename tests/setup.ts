@@ -21,22 +21,27 @@ vi.mock("next/navigation", () => ({
 /** Controls whether the troubleshooter's embedded studio is shown (wide screens). */
 export const media = { wide: false };
 
-Object.defineProperty(window, "matchMedia", {
-  writable: true,
-  value: (query: string) => ({
-    matches: media.wide,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }),
-});
+// Node-environment suites (e.g. the photo pipeline) have no window.
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: media.wide,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }),
+  });
+}
 
 afterEach(() => {
   cleanup();
+  // Sessions persist in sessionStorage; never let one test's session leak into the next.
+  if (typeof window !== "undefined") window.sessionStorage.clear();
   navigation.pathname = "/";
   navigation.push.mockClear();
   media.wide = false;

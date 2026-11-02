@@ -26,7 +26,9 @@ All of these must pass before you hand work back. Report failures honestly, with
 | Workspace commands & state | `src/lib/workspace/` | Security boundary between troubleshooting logic and UI. |
 | Troubleshooting engine | `src/lib/troubleshooter/` | Pure functions. No React, I/O or randomness in `engine.ts`/`interpret.ts`. |
 | Knowledge search | `src/lib/knowledge/` | |
-| UI components | `src/components/{shell,ui,studio,troubleshooter,knowledge,dashboard}` | Reuse `ui/` primitives. |
+| Session persistence | `src/lib/session/` | Validates everything it restores. |
+| UI components | `src/components/{shell,ui,studio,troubleshooter,knowledge,dashboard,dev}` | Reuse `ui/` primitives. `dev/` is the developer-only hotspot editor. |
+| Scripts | `scripts/` | Photo import (metadata removal, blur) and icon generation. |
 | Routes | `src/app/` | Thin pages composing components. |
 | Tests | `tests/unit`, `tests/e2e` | Keep alongside behaviour changes. |
 
@@ -34,12 +36,14 @@ Keep changes focused. Don't reformat or restructure unrelated files. Don't add d
 
 ## Rules for avoiding unverified technical advice
 1. Never invent model numbers, wiring, signal routing, settings, specifications or step-by-step procedures — not in data, UI copy, tests, or documentation.
-2. Mark every fact with a `VerificationStatus`: `verified` (engineer confirmed, with `lastReviewed` date), `station-reported`, or `draft`. Default to `draft`.
+2. Mark every fact with a `VerificationStatus`: `verified` (engineer confirmed, with a `review` record: reviewer, date, source), `station-reported` (with a `source`), or `draft`. Default to `draft`. Labels read from photos are `draft` observations with a source.
 3. If you need a fact that isn't recorded, add it as a question in the equipment record's `requiresVerification` and in `EQUIPMENT.md` instead of guessing.
 4. Troubleshooting flows may ask questions and collect information. They must end by offering technical support, and must not prescribe a fix unless an engineer-verified procedure exists.
 5. Generic safety cautions (e.g. "don't unplug cables you're unsure about while on air") are acceptable; station-specific instructions are not, until verified.
 6. Never present illustrative images or diagrams as the real studio; never imply the app is connected to, or can control, real equipment.
 7. Any AI integration must emit structured commands that are validated against the allow-list and real content IDs before use.
+8. Never reset a conversation from typed text, never answer "should I restart…?" with a procedure, and keep possible silence on air as an urgent path.
+9. Never commit photos without running them through `scripts/import-photo.mjs`, and never show contact details (e.g. a number seen on a sticker) until the station confirms them.
 
 ## Adding studio photographs
 See README → "Adding studio photographs".

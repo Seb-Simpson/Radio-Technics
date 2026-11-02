@@ -11,8 +11,11 @@ import type { FlowNode, TroubleshootingTopic } from "@/lib/troubleshooter/types"
  * - Ask one thing at a time, in plain English.
  */
 
-const YES = ["yes", "yeah", "yep", "y", "it is", "correct"];
-const NO = ["no", "nope", "n", "it isn't", "it is not"];
+/*
+ * Typed replies are understood by src/lib/troubleshooter/understand.ts.
+ * Options declare their meaning (`answer`, `signals`) rather than lists of
+ * yes/no words, so "No, it is silent" can never be read as "yes".
+ */
 
 export const flowNodes: FlowNode[] = [
   /* ---------------- Green button ---------------- */
@@ -31,13 +34,14 @@ export const flowNodes: FlowNode[] = [
   {
     id: "gb-current-song",
     kind: "question",
+    broadcastCheck: true,
     prompt: "Is the song that was already playing still playing?",
     showEquipmentId: "myriad-playout",
     options: [
-      { id: "yes", label: "Yes, it's still playing", next: "outcome-report", match: YES },
-      { id: "no-silent", label: "No — there's silence", next: "outcome-urgent", match: ["silence", "silent", "nothing playing", ...NO] },
+      { id: "yes", label: "Yes, it's still playing", next: "outcome-report", answer: "yes", match: ["still playing"] },
+      { id: "no-silent", label: "No — there's silence", next: "outcome-urgent", answer: "no", signals: ["silence"] },
     ],
-    unsureNext: "outcome-report",
+    unsureNext: "hear-on-air",
   },
   {
     id: "gb-unexpected",
@@ -58,8 +62,8 @@ export const flowNodes: FlowNode[] = [
     help: "Choose “Show me where” to see where it is in the Studio Explorer.",
     showEquipmentId: "myriad-playout",
     options: [
-      { id: "found", label: "Yes, I've found it", next: "gb-screen", match: [...YES, "found it"] },
-      { id: "not-found", label: "No, I can't find it", next: "outcome-report", match: NO },
+      { id: "found", label: "Yes, I've found it", next: "gb-screen", answer: "yes", match: ["found it"] },
+      { id: "not-found", label: "No, I can't find it", next: "outcome-report", answer: "no", match: ["can't find"] },
     ],
     unsureNext: "outcome-report",
   },
@@ -108,8 +112,8 @@ export const flowNodes: FlowNode[] = [
     help: "Level meters are the bars or lights that bounce up and down when there is sound.",
     showEquipmentId: "audio-level-meters",
     options: [
-      { id: "move", label: "Yes, they move", next: "mic-since", match: [...YES, "they move"] },
-      { id: "still", label: "No, they don't move", next: "mic-since", match: [...NO, "don't move", "dont move"] },
+      { id: "move", label: "Yes, they move", next: "mic-since", answer: "yes", match: ["they move", "moving"] },
+      { id: "still", label: "No, they don't move", next: "mic-since", answer: "no", match: ["don't move", "not moving"] },
     ],
     unsureNext: "mic-since",
   },
@@ -119,8 +123,8 @@ export const flowNodes: FlowNode[] = [
     prompt: "Can you hear other sounds in your headphones, such as music playing?",
     showEquipmentId: "headphone-monitoring",
     options: [
-      { id: "yes", label: "Yes, I can hear other sounds", next: "mic-since", match: YES },
-      { id: "no", label: "No, I can't hear anything", next: "mic-since", match: NO },
+      { id: "yes", label: "Yes, I can hear other sounds", next: "mic-since", answer: "yes" },
+      { id: "no", label: "No, I can't hear anything", next: "mic-since", answer: "no", signals: ["no-sound"] },
     ],
     unsureNext: "mic-since",
   },
@@ -129,8 +133,8 @@ export const flowNodes: FlowNode[] = [
     kind: "question",
     prompt: "Was this microphone working earlier today?",
     options: [
-      { id: "yes", label: "Yes, it was working earlier", next: "outcome-report", match: YES },
-      { id: "no", label: "No, it hasn't worked today", next: "outcome-report", match: NO },
+      { id: "yes", label: "Yes, it was working earlier", next: "outcome-report", answer: "yes", match: ["working earlier", "was working"] },
+      { id: "no", label: "No, it hasn't worked today", next: "outcome-report", answer: "no", match: ["not worked", "hasn't worked"] },
     ],
     unsureNext: "outcome-report",
   },
@@ -153,7 +157,7 @@ export const flowNodes: FlowNode[] = [
     prompt: "Is anything at all coming through your headphones?",
     showEquipmentId: "headphone-monitoring",
     options: [
-      { id: "nothing", label: "Nothing at all", next: "hear-meters", match: ["nothing", ...NO] },
+      { id: "nothing", label: "Nothing at all", next: "hear-meters", answer: "no", signals: ["no-sound"], match: ["nothing at all"] },
       { id: "some", label: "Some sounds, but not everything", next: "hear-meters", match: ["some", "some sounds"] },
     ],
     unsureNext: "hear-meters",
@@ -164,7 +168,7 @@ export const flowNodes: FlowNode[] = [
     prompt: "Is anything at all coming through the studio speakers?",
     showEquipmentId: "studio-monitor-speakers",
     options: [
-      { id: "nothing", label: "Nothing at all", next: "hear-meters", match: ["nothing", ...NO] },
+      { id: "nothing", label: "Nothing at all", next: "hear-meters", answer: "no", signals: ["no-sound"], match: ["nothing at all"] },
       { id: "some", label: "Some sounds, but not everything", next: "hear-meters", match: ["some", "some sounds"] },
     ],
     unsureNext: "hear-meters",
@@ -172,10 +176,11 @@ export const flowNodes: FlowNode[] = [
   {
     id: "hear-on-air",
     kind: "question",
+    broadcastCheck: true,
     prompt: "Do you think the station might be silent on air right now?",
     options: [
-      { id: "yes", label: "Yes, it might be silent", next: "outcome-urgent", match: [...YES, "silent"] },
-      { id: "no", label: "No, there is sound but something is missing", next: "hear-meters", match: NO },
+      { id: "yes", label: "Yes, it might be silent", next: "outcome-urgent", answer: "yes", signals: ["silence"] },
+      { id: "no", label: "No, there is sound but something is missing", next: "hear-meters", answer: "no", match: ["something is missing", "there is sound"] },
     ],
     unsureNext: "outcome-urgent",
   },
@@ -186,8 +191,8 @@ export const flowNodes: FlowNode[] = [
     help: "Level meters are the bars or lights that bounce up and down when there is sound.",
     showEquipmentId: "audio-level-meters",
     options: [
-      { id: "move", label: "Yes, they move", next: "outcome-report", match: [...YES, "they move"] },
-      { id: "still", label: "No, they don't move", next: "outcome-report", match: [...NO, "don't move", "dont move"] },
+      { id: "move", label: "Yes, they move", next: "outcome-report", answer: "yes", match: ["they move", "moving"] },
+      { id: "still", label: "No, they don't move", next: "outcome-report", answer: "no", match: ["don't move", "not moving"] },
     ],
     unsureNext: "outcome-report",
   },
@@ -224,8 +229,8 @@ export const flowNodes: FlowNode[] = [
     kind: "question",
     prompt: "Was the {equipment} working normally earlier today?",
     options: [
-      { id: "yes", label: "Yes, it was working earlier", next: "outcome-report", match: YES },
-      { id: "no", label: "No, it hasn't worked today", next: "outcome-report", match: NO },
+      { id: "yes", label: "Yes, it was working earlier", next: "outcome-report", answer: "yes", match: ["working earlier", "was working"] },
+      { id: "no", label: "No, it hasn't worked today", next: "outcome-report", answer: "no", match: ["not worked", "hasn't worked"] },
     ],
     unsureNext: "outcome-report",
   },
@@ -243,7 +248,7 @@ export const flowNodes: FlowNode[] = [
     kind: "outcome",
     urgent: true,
     prompt:
-      "Possible silence on air needs attention straight away. Contact technical support now and tell them the station may be silent. If the station has its own emergency procedure, follow it.",
+      "Possible silence on air needs attention straight away. Contact technical support now and tell them the station may be silent. If the station has its own emergency procedure, follow it. Please don't restart equipment or press controls you're unsure about \u2014 Radio Technics has no engineer-approved recovery steps yet.",
     options: [],
   },
   {

@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, ImagePlus } from "lucide-react";
+import { ArrowLeft, ImagePlus, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import { hotspots as defaultHotspots } from "@/data/hotspots";
 import { EXPECTED_PHOTO_COUNT } from "@/data/studio-views";
 import { Notice } from "@/components/ui/Notice";
@@ -10,10 +11,13 @@ import { buttonStyles } from "@/components/ui/button-styles";
 import { getCategories, getEquipmentByCategory } from "@/lib/content/equipment";
 import { getViews } from "@/lib/content/views";
 import { cn } from "@/lib/cn";
+import { describeStep } from "@/lib/troubleshooter/engine";
 import { useTroubleshooter } from "@/lib/troubleshooter/TroubleshooterProvider";
+import { useMediaQuery, WIDE_LAYOUT_QUERY } from "@/lib/use-media-query";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
 import type { Hotspot, StudioView } from "@/types";
 import { EquipmentPanel } from "./EquipmentPanel";
+import { EquipmentSheet } from "./EquipmentSheet";
 import { PhotoViewer } from "./PhotoViewer";
 
 export interface StudioExplorerProps {
@@ -28,6 +32,19 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
   const { send, active: conversationActive, conversation } = useTroubleshooter();
   const router = useRouter();
   const embedded = variant === "embedded";
+  const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
+  // Phones and tablets show the selected equipment in a bottom sheet.
+  const useSheet = !embedded && !wide;
+  const viewerRef = useRef<HTMLDivElement>(null);
+
+  // Phones/tablets: after "Show me where", bring the photo to the top of the screen so the
+  // highlighted (and zoomed-to) equipment sits above the bottom sheet.
+  const focusToken = state.focusRequest?.token;
+  useEffect(() => {
+    if (!useSheet || focusToken === undefined || !viewerRef.current) return;
+    const top = viewerRef.current.getBoundingClientRect().top + window.scrollY - 64;
+    window.scrollTo?.({ top: Math.max(0, top), behavior: "auto" });
+  }, [useSheet, focusToken]);
 
   const activeView = views.find((view) => view.id === state.activeViewId) ?? views[0];
   const viewHotspots = activeView ? hotspots.filter((h) => h.viewId === activeView.id) : [];
@@ -58,6 +75,7 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
       onTroubleshoot={canTroubleshoot ? troubleshoot : undefined}
       troubleshootLabel={embedded ? "Use in troubleshooter" : "Troubleshoot this"}
       inCurrentView={selectedInView}
+      photoHotspot={viewHotspots.find((h) => h.equipmentId === state.selectedEquipmentId) ?? null}
     />
   );
 
@@ -65,41 +83,21 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
     <div className={cn("flex flex-col gap-4", embedded && "h-full")}>
       {!hasRealPhotos && !embedded && <MissingPhotosNotice />}
 
-      {!embedded && conversationActive && (
-        <div>
-          <Link href="/troubleshooter" className={buttonStyles({ size: "sm" })}>
-            <ArrowLeft aria-hidden className="size-4" />
-            Back to troubleshooter
-          </Link>
-        </div>
-      )}
+      {!embedded && conversationActive && <ConversationLink prompt={describeStep(conversation).prompt} />}
 
       <div className={cn("grid gap-4", embedded ? "min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_380px]")}>
         <div className="flex min-w-0 flex-col gap-3">
           {views.length > 1 && (
-            <div role="tablist" aria-label="Studio views" className="flex gap-1.5 overflow-x-auto pb-1">
-              {views.map((view) => {
-                const selected = view.id === activeView?.id;
-                return (
-                  <button
-                    key={view.id}
-                    role="tab"
-                    type="button"
-                    aria-selected={selected}
-                    onClick={() => run([{ type: "show_view", viewId: view.id }])}
-                    className={cn(
-                      "shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-                      selected ? "border-signal-500/50 bg-signal-900/50 text-signal-300" : "border-ink-700 bg-ink-850 text-ink-300 hover:text-ink-100",
-                    )}
-                  >
-                    {view.title}
-                  </button>
-                );
-              })}
-            </div>
+            <ViewTabs
+              views={views}
+              activeViewId={activeView?.id ?? null}
+              idPrefix={variant}
+              onSelect={(viewId) => run([{ type: "show_view", viewId }])}
+            />
           )}
 
           {activeView ? (
+            <div ref={viewerRef} role={views.length > 1 ? "tabpanel" : undefined} id={`${variant}-view-panel`} aria-labelledby={views.length > 1 ? `${variant}-tab-${activeView.id}` : undefined}>
             <PhotoViewer
               view={activeView}
               hotspots={viewHotspots}
@@ -107,8 +105,9 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
               highlightedEquipmentId={state.highlightedEquipmentId}
               focusRequest={state.focusRequest}
               onSelectEquipment={selectEquipment}
-              className={embedded ? "aspect-[16/10] w-full" : "aspect-[4/3] w-full sm:aspect-[16/10] xl:aspect-auto xl:h-[min(64vh,680px)]"}
+              className={embedded ? "aspect-[16/10] w-full" : "aspect-[4/5] w-full sm:aspect-[4/3] xl:aspect-auto xl:h-[min(64vh,700px)]"}
             />
+            </div>
           ) : (
             <EmptyStudioState />
           )}
@@ -122,16 +121,114 @@ export function StudioExplorer({ variant = "full", views = getViews(), hotspots 
           )}
         </div>
 
-        <aside
-          aria-label="Selected equipment"
-          className={cn(
-            "overflow-y-auto rounded-xl border border-ink-750 bg-ink-900",
-            embedded ? "min-h-0" : "xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:self-start",
-          )}
-        >
-          {panel}
-        </aside>
+        {!useSheet && (
+          <aside
+            aria-label="Selected equipment"
+            className={cn(
+              "overflow-y-auto rounded-xl border border-ink-750 bg-ink-900",
+              embedded ? "min-h-0" : "xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:self-start",
+            )}
+          >
+            {panel}
+          </aside>
+        )}
       </div>
+
+      {useSheet && state.selectedEquipmentId && (
+        <>
+          {/* Room to scroll the page above the sheet. */}
+          <div aria-hidden className="h-56" />
+          <EquipmentSheet
+            key={state.selectedEquipmentId}
+            equipmentId={state.selectedEquipmentId}
+            onClose={() => run([{ type: "clear_selection" }])}
+            onTroubleshoot={troubleshoot}
+            conversationActive={conversationActive}
+            details={panel}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Shown on the Studio Explorer while a conversation is in progress, so it's always one tap away. */
+function ConversationLink({ prompt }: { prompt: string }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-signal-500/30 bg-signal-900/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 gap-2.5">
+        <MessageSquare aria-hidden className="mt-0.5 size-4 shrink-0 text-signal-400" />
+        <p className="line-clamp-2 text-sm text-ink-100 sm:line-clamp-none">
+          <span className="font-medium text-ink-50">Your conversation is waiting: </span>
+          {prompt}
+        </p>
+      </div>
+      <Link href="/troubleshooter" className={buttonStyles({ variant: "primary", size: "sm", className: "h-10 shrink-0" })}>
+        <ArrowLeft aria-hidden className="size-4" />
+        Back to conversation
+      </Link>
+    </div>
+  );
+}
+
+/** Thumbnail tabs for the studio photographs (WAI-ARIA tabs pattern with arrow-key navigation). */
+function ViewTabs({
+  views,
+  activeViewId,
+  idPrefix,
+  onSelect,
+}: {
+  views: StudioView[];
+  activeViewId: string | null;
+  idPrefix: string;
+  onSelect: (viewId: string) => void;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const move = (event: KeyboardEvent<HTMLDivElement>) => {
+    const index = views.findIndex((v) => v.id === activeViewId);
+    const target =
+      event.key === "ArrowRight" ? (index + 1) % views.length
+      : event.key === "ArrowLeft" ? (index - 1 + views.length) % views.length
+      : event.key === "Home" ? 0
+      : event.key === "End" ? views.length - 1
+      : null;
+    if (target === null) return;
+    event.preventDefault();
+    const view = views[target]!;
+    onSelect(view.id);
+    listRef.current?.querySelector<HTMLButtonElement>(`#${idPrefix}-tab-${view.id}`)?.focus();
+  };
+  return (
+    <div ref={listRef} role="tablist" aria-label="Studio photographs" onKeyDown={move} className="flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:thin]">
+      {views.map((view) => {
+        const selected = view.id === activeViewId;
+        return (
+          <button
+            key={view.id}
+            id={`${idPrefix}-tab-${view.id}`}
+            role="tab"
+            type="button"
+            aria-selected={selected}
+            aria-controls={`${idPrefix}-view-panel`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onSelect(view.id)}
+            className={cn(
+              "group flex w-[84px] shrink-0 flex-col gap-1 rounded-lg border p-1 text-left transition-colors",
+              selected ? "border-signal-400/70 bg-signal-900/50" : "border-ink-700 bg-ink-850 hover:border-ink-500",
+            )}
+          >
+            {view.kind === "photo" && view.src ? (
+              // eslint-disable-next-line @next/next/no-img-element -- small static thumbnails
+              <img src={view.src} alt="" loading="lazy" className="h-12 w-full rounded object-cover" />
+            ) : (
+              <span aria-hidden className="h-12 w-full rounded bg-ink-750" />
+            )}
+            <span className={cn("line-clamp-2 px-0.5 text-[11px] leading-tight font-medium", selected ? "text-signal-300" : "text-ink-200")}>
+              {view.title}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

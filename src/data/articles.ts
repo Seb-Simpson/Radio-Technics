@@ -6,7 +6,7 @@ import type { KnowledgeArticle } from "@/types";
  * No article is engineer-verified yet. Articles describe what is known, what
  * questions to ask, and what to tell technical support — they do NOT contain
  * repair procedures. A section may only be marked `verified` once the station
- * engineer has reviewed it, and the article's `lastReviewed` must then be set.
+ * engineer has reviewed it, with a `review` record (reviewer, date, source).
  */
 export const articles: KnowledgeArticle[] = [
   {
@@ -28,7 +28,6 @@ export const articles: KnowledgeArticle[] = [
       "studio-computers",
     ],
     status: "station-reported",
-    lastReviewed: null,
     keywords: ["overview", "introduction", "studio", "equipment", "what is"],
     sections: [
       {
@@ -54,7 +53,6 @@ export const articles: KnowledgeArticle[] = [
     summary: "What the standalone green button does, and what is still to be confirmed.",
     equipmentIds: ["green-next-button", "myriad-playout"],
     status: "station-reported",
-    lastReviewed: null,
     keywords: ["green", "button", "next", "song", "track", "skip", "advance", "myriad"],
     sections: [
       {
@@ -80,7 +78,6 @@ export const articles: KnowledgeArticle[] = [
     summary: "The webcam the station uses for Zoom video calls.",
     equipmentIds: ["zoom-camera"],
     status: "station-reported",
-    lastReviewed: null,
     keywords: ["camera", "video", "zoom", "webcam", "call", "video call"],
     sections: [
       {
@@ -105,7 +102,6 @@ export const articles: KnowledgeArticle[] = [
     summary: "Questions to work through when a presenter or guest microphone isn't working.",
     equipmentIds: ["presenter-microphone", "guest-microphones", "audio-level-meters", "headphone-monitoring"],
     status: "draft",
-    lastReviewed: null,
     keywords: ["microphone", "mic", "can't hear", "voice", "silent", "quiet", "guest", "presenter"],
     sections: [
       {
@@ -134,7 +130,6 @@ export const articles: KnowledgeArticle[] = [
     summary: "Information to gather when Myriad doesn't move on to the next song.",
     equipmentIds: ["myriad-playout", "green-next-button"],
     status: "draft",
-    lastReviewed: null,
     keywords: ["next song", "track", "myriad", "green button", "won't play", "stuck", "playout"],
     sections: [
       {
@@ -165,7 +160,6 @@ export const articles: KnowledgeArticle[] = [
     summary: "Narrowing down where sound is missing — headphones, speakers or on air.",
     equipmentIds: ["headphone-monitoring", "studio-monitor-speakers", "audio-level-meters", "mixing-console"],
     status: "draft",
-    lastReviewed: null,
     keywords: ["can't hear", "no sound", "silent", "silence", "headphones", "speakers", "audio"],
     sections: [
       {
@@ -194,7 +188,6 @@ export const articles: KnowledgeArticle[] = [
     summary: "What to do if you notice a cable that looks disconnected.",
     equipmentIds: ["equipment-rack", "mixing-console", "studio-computers"],
     status: "draft",
-    lastReviewed: null,
     keywords: ["cable", "wire", "lead", "plug", "unplugged", "disconnected", "black wire"],
     sections: [
       {
@@ -214,7 +207,6 @@ export const articles: KnowledgeArticle[] = [
     summary: "How to ask for help, and what information to give.",
     equipmentIds: [],
     status: "draft",
-    lastReviewed: null,
     keywords: ["support", "help", "engineer", "contact", "call", "emergency"],
     sections: [
       {

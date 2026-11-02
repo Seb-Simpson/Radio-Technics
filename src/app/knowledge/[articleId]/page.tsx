@@ -94,7 +94,9 @@ export default async function ArticlePage({ params }: Props) {
           <div className="rounded-xl border border-ink-750 bg-ink-900 p-4">
             <h2 className="text-sm font-semibold text-ink-100">Review status</h2>
             <p className="mt-1 text-[13px] text-ink-400">
-              {article.lastReviewed ? `Last reviewed by the engineer on ${article.lastReviewed}.` : "Not yet reviewed by the station engineer."}
+              {article.review
+                ? `Reviewed by ${article.review.reviewer} on ${article.review.date} (${article.review.source}).`
+                : "Not yet reviewed by the station engineer."}
             </p>
           </div>
           {relatedEquipment.length > 0 && (

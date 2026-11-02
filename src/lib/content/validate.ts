@@ -1,10 +1,12 @@
 import { articles } from "@/data/articles";
-import { equipment } from "@/data/equipment";
+import { equipment, equipmentCategories } from "@/data/equipment";
 import { hotspots } from "@/data/hotspots";
 import { demoLayoutView, studioPhotos } from "@/data/studio-views";
 import { flowNodes, troubleshootingTopics } from "@/data/troubleshooting-flows";
-import type { EquipmentRecord, Hotspot, KnowledgeArticle, StudioView } from "@/types";
 import type { FlowNode, TroubleshootingTopic } from "@/lib/troubleshooter/types";
+import type { Signal } from "@/lib/troubleshooter/understand";
+import type { EquipmentRecord, Fact, Hotspot, KnowledgeArticle, ReviewRecord, StudioView, VerificationStatus } from "@/types";
+import { validateRegion } from "./geometry";
 
 export interface ContentIssue {
   area: "equipment" | "views" | "hotspots" | "articles" | "flows" | "topics";
@@ -30,6 +32,11 @@ export const defaultContent: ContentBundle = {
 };
 
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const STATUSES: readonly VerificationStatus[] = ["verified", "station-reported", "draft"];
+const SIGNALS: readonly Signal[] = ["silence", "no-sound", "not-working", "on-air-unknown"];
+const PLACEHOLDER_NAMES = /^(tbc|tbd|unknown|n\/a|na|none|test|todo|engineer|\?+)$/i;
+const PHOTO_SRC = /^\/studio\/photos\/[a-z0-9-]+\.(jpe?g|png|webp)$/;
+const EARLIEST_REVIEW = "2020-01-01";
 
 function duplicates(ids: string[]): string[] {
   const seen = new Set<string>();
@@ -41,16 +48,69 @@ function duplicates(ids: string[]): string[] {
   return [...dupes];
 }
 
+/** True for a real calendar date written as YYYY-MM-DD (rejects 2026-02-30, "yesterday", etc.). */
+export function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function todayIso(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/** Problems with a review record. `now` is injectable for tests. */
+export function validateReview(review: unknown, now: Date = new Date()): string[] {
+  if (typeof review !== "object" || review === null) return ["review record is missing"];
+  const r = review as Partial<ReviewRecord>;
+  const errors: string[] = [];
+  if (typeof r.reviewer !== "string" || r.reviewer.trim().length < 2 || PLACEHOLDER_NAMES.test(r.reviewer.trim())) {
+    errors.push("review needs the reviewer's name or role");
+  }
+  if (!isValidIsoDate(r.date)) errors.push("review date must be a real date in YYYY-MM-DD format");
+  else if (r.date > todayIso(now)) errors.push("review date is in the future");
+  else if (r.date < EARLIEST_REVIEW) errors.push("review date is implausibly early");
+  if (typeof r.source !== "string" || r.source.trim().length < 3) errors.push("review needs a source (how it was confirmed)");
+  return errors;
+}
+
 /**
- * Check that every cross-reference in the content resolves.
- * Used by the unit tests and shown on the Administration page.
+ * Something may only be `verified` with a valid review. Nothing in the app
+ * promotes content automatically: a status only changes when a person edits
+ * the data, and this check then requires the evidence.
  */
-export function validateContent(content: ContentBundle = defaultContent): ContentIssue[] {
+function checkVerification(
+  label: string,
+  status: unknown,
+  review: unknown,
+  now: Date,
+): string[] {
+  if (!STATUSES.includes(status as VerificationStatus)) return [`${label} has an unknown verification status "${String(status)}"`];
+  if (status === "verified") return validateReview(review, now).map((e) => `${label} is marked verified but its ${e}`);
+  if (review !== undefined) return validateReview(review, now).map((e) => `${label} has an invalid review: ${e}`);
+  return [];
+}
+
+function checkFact(label: string, fact: Fact, now: Date): string[] {
+  const issues = checkVerification(label, fact.status, fact.review, now);
+  if (!fact.text?.trim()) issues.push(`${label} has no text`);
+  if (fact.status === "station-reported" && !fact.source?.trim()) issues.push(`${label} is station-reported but has no source`);
+  return issues;
+}
+
+/**
+ * Check that every cross-reference and every trust claim in the content is
+ * sound. Used by the unit tests and shown on the Administration page.
+ */
+export function validateContent(content: ContentBundle = defaultContent, now: Date = new Date()): ContentIssue[] {
   const issues: ContentIssue[] = [];
+  const add = (area: ContentIssue["area"], messages: string[]) => messages.forEach((message) => issues.push({ area, message }));
+
   const equipmentIds = new Set(content.equipment.map((e) => e.id));
   const viewIds = new Set(content.views.map((v) => v.id));
   const articleIds = new Set(content.articles.map((a) => a.id));
   const nodeIds = new Set(content.flowNodes.map((n) => n.id));
+  const categoryIds = new Set(equipmentCategories.map((c) => c.id));
 
   const groups: [ContentIssue["area"], string[]][] = [
     ["equipment", content.equipment.map((e) => e.id)],
@@ -62,77 +122,88 @@ export function validateContent(content: ContentBundle = defaultContent): Conten
   ];
   for (const [area, ids] of groups) {
     for (const id of duplicates(ids)) issues.push({ area, message: `Duplicate ID "${id}"` });
-    for (const id of ids) {
-      if (!ID_PATTERN.test(id)) issues.push({ area, message: `ID "${id}" is not kebab-case` });
-    }
+    for (const id of ids) if (!ID_PATTERN.test(id)) issues.push({ area, message: `ID "${id}" is not kebab-case` });
   }
 
+  /* Equipment */
   for (const record of content.equipment) {
+    if (!categoryIds.has(record.category)) add("equipment", [`${record.id} has unknown category "${record.category}"`]);
+    add("equipment", checkFact(`${record.id} primary function`, record.primaryFunction, now));
+    record.knownInformation.forEach((fact, i) => add("equipment", checkFact(`${record.id} fact ${i + 1}`, fact, now)));
     for (const articleId of record.relatedArticleIds) {
-      if (!articleIds.has(articleId)) {
-        issues.push({ area: "equipment", message: `${record.id} links to missing article "${articleId}"` });
-      }
+      if (!articleIds.has(articleId)) add("equipment", [`${record.id} links to missing article "${articleId}"`]);
     }
     if (record.flowEntryNodeId && !nodeIds.has(record.flowEntryNodeId)) {
-      issues.push({ area: "equipment", message: `${record.id} links to missing flow node "${record.flowEntryNodeId}"` });
+      add("equipment", [`${record.id} links to missing flow node "${record.flowEntryNodeId}"`]);
     }
-    if (record.aliases.length === 0) {
-      issues.push({ area: "equipment", message: `${record.id} has no aliases` });
-    }
+    if (record.aliases.length === 0) add("equipment", [`${record.id} has no aliases`]);
   }
 
+  /* Views */
   for (const view of content.views) {
-    if (view.width <= 0 || view.height <= 0) {
-      issues.push({ area: "views", message: `${view.id} has invalid dimensions` });
+    if (!Number.isInteger(view.width) || !Number.isInteger(view.height) || view.width <= 0 || view.height <= 0) {
+      add("views", [`${view.id} has invalid dimensions`]);
     }
-    if (view.kind === "photo" && !view.src) {
-      issues.push({ area: "views", message: `${view.id} is a photo with no src` });
+    if (view.kind === "photo") {
+      if (!view.src) add("views", [`${view.id} is a photo with no src`]);
+      else if (!PHOTO_SRC.test(view.src)) add("views", [`${view.id} src must be a file in /studio/photos/`]);
+      if (view.illustrative) add("views", [`${view.id} is a photo but marked illustrative`]);
     }
+    if (!view.alt.trim()) add("views", [`${view.id} has no alt text`]);
   }
 
+  /* Hotspots */
   for (const hotspot of content.hotspots) {
-    if (!equipmentIds.has(hotspot.equipmentId)) {
-      issues.push({ area: "hotspots", message: `${hotspot.id} references missing equipment "${hotspot.equipmentId}"` });
-    }
-    if (!viewIds.has(hotspot.viewId)) {
-      issues.push({ area: "hotspots", message: `${hotspot.id} references missing view "${hotspot.viewId}"` });
-    }
-    const { x, y, width, height } = hotspot.region;
-    if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) {
-      issues.push({ area: "hotspots", message: `${hotspot.id} region falls outside the image` });
-    }
+    if (!equipmentIds.has(hotspot.equipmentId)) add("hotspots", [`${hotspot.id} references missing equipment "${hotspot.equipmentId}"`]);
+    if (!viewIds.has(hotspot.viewId)) add("hotspots", [`${hotspot.id} references missing view "${hotspot.viewId}"`]);
+    add("hotspots", validateRegion(hotspot.region).map((e) => `${hotspot.id}: ${e}`));
+    add("hotspots", checkVerification(`${hotspot.id} identity`, hotspot.identity, hotspot.review, now));
+    const view = content.views.find((v) => v.id === hotspot.viewId);
+    if (view?.illustrative && !hotspot.placeholder) add("hotspots", [`${hotspot.id} is on an illustrative view but not marked as a placeholder`]);
   }
 
+  /* Articles */
   for (const article of content.articles) {
     for (const equipmentId of article.equipmentIds) {
-      if (!equipmentIds.has(equipmentId)) {
-        issues.push({ area: "articles", message: `${article.id} references missing equipment "${equipmentId}"` });
+      if (!equipmentIds.has(equipmentId)) add("articles", [`${article.id} references missing equipment "${equipmentId}"`]);
+    }
+    add("articles", checkVerification(article.id, article.status, article.review, now));
+    article.sections.forEach((section, i) => {
+      const label = `${article.id} section ${i + 1} ("${section.heading}")`;
+      add("articles", checkVerification(label, section.status, section.review ?? (section.status === "verified" ? article.review : undefined), now));
+      if (article.status === "verified" && section.status !== "verified") {
+        add("articles", [`${article.id} is marked verified but ${label} is not`]);
       }
-    }
-    if (article.status === "verified" && !article.lastReviewed) {
-      issues.push({ area: "articles", message: `${article.id} is marked verified but has no review date` });
-    }
+      if (section.body.length === 0) add("articles", [`${label} is empty`]);
+    });
   }
 
+  /* Flows */
   for (const node of content.flowNodes) {
     for (const option of node.options) {
-      if (!nodeIds.has(option.next)) {
-        issues.push({ area: "flows", message: `${node.id} option "${option.id}" leads to missing node "${option.next}"` });
-      }
+      if (!nodeIds.has(option.next)) add("flows", [`${node.id} option "${option.id}" leads to missing node "${option.next}"`]);
       if (option.setEquipmentId && !equipmentIds.has(option.setEquipmentId)) {
-        issues.push({ area: "flows", message: `${node.id} option "${option.id}" sets missing equipment "${option.setEquipmentId}"` });
+        add("flows", [`${node.id} option "${option.id}" sets missing equipment "${option.setEquipmentId}"`]);
+      }
+      for (const signal of option.signals ?? []) {
+        if (!SIGNALS.includes(signal)) add("flows", [`${node.id} option "${option.id}" has unknown signal "${signal}"`]);
       }
     }
     if (node.kind === "question") {
-      if (!node.unsureNext) issues.push({ area: "flows", message: `${node.id} has no "I'm not sure" route` });
-      else if (!nodeIds.has(node.unsureNext)) {
-        issues.push({ area: "flows", message: `${node.id} "I'm not sure" leads to missing node "${node.unsureNext}"` });
-      }
-      if (node.options.length === 0) issues.push({ area: "flows", message: `${node.id} is a question with no answers` });
+      if (!node.unsureNext) add("flows", [`${node.id} has no "I'm not sure" route`]);
+      else if (!nodeIds.has(node.unsureNext)) add("flows", [`${node.id} "I'm not sure" leads to missing node "${node.unsureNext}"`]);
+      if (node.options.length === 0) add("flows", [`${node.id} is a question with no answers`]);
+      const answers = node.options.map((o) => o.answer).filter(Boolean);
+      if (new Set(answers).size !== answers.length) add("flows", [`${node.id} has two options with the same yes/no meaning`]);
     }
     if (node.showEquipmentId && !equipmentIds.has(node.showEquipmentId)) {
-      issues.push({ area: "flows", message: `${node.id} shows missing equipment "${node.showEquipmentId}"` });
+      add("flows", [`${node.id} shows missing equipment "${node.showEquipmentId}"`]);
     }
+  }
+
+  /* Topics */
+  for (const topic of content.topics) {
+    if (!topic.utterance.trim()) add("topics", [`${topic.id} has no utterance`]);
   }
 
   return issues;

@@ -18,7 +18,17 @@
  * - `station-reported` Reported by station staff; engineer has not yet confirmed.
  * - `draft`            Written by the development team; must not be treated as procedure.
  */
-export type VerificationStatus = "verified" | "station-reported" | "draft";
+export type VerificationStatus = "verified" | "manufacturer-documented" | "station-reported" | "draft";
+
+/*
+ * Levels of authority, from strongest to weakest for THIS studio:
+ *   verified                — engineer-approved station information/instruction
+ *   station-reported        — the station has described its setup
+ *   manufacturer-documented — the manufacturer describes a feature in general
+ *   draft                   — written by the development team / unconfirmed
+ * Manufacturer documentation explains how a product generally behaves. It
+ * never authorises operating or changing the station's equipment.
+ */
 
 /**
  * Evidence that the station engineer reviewed something. Required for
@@ -137,12 +147,63 @@ export interface Hotspot {
 
 export type ArticleType = "equipment-guide" | "troubleshooting" | "help-topic";
 
+/**
+ * `informational` explains things. `approved-procedure` gives steps a
+ * presenter may follow — only allowed when engineer-verified with a review.
+ */
+export type ArticleKind = "informational" | "approved-procedure";
+
+export type SourceKind = "manufacturer" | "station" | "photograph" | "engineer" | "development-team";
+
+export interface SourceReference {
+  /** Unique within the article. Sections cite sources by this ID. */
+  id: string;
+  title: string;
+  url?: string;
+  publisher: string;
+  kind: SourceKind;
+  /**
+   * YYYY-MM-DD when someone actually read the source for this article, or
+   * null if it is only listed for future reading. A manufacturer source must
+   * have been read before anything can be marked manufacturer-documented.
+   */
+  retrievedOn: string | null;
+  note?: string;
+}
+
+export interface ArticleRevision {
+  date: string;
+  author: string;
+  summary: string;
+}
+
 export interface ArticleSection {
   heading: string;
   body: string[];
   status: VerificationStatus;
+  /** Sources supporting this section (IDs from the article's `sources`). */
+  sourceIds?: string[];
   /** Defaults to the article's review when omitted. */
   review?: ReviewRecord;
+}
+
+export interface SoftwareApplicability {
+  product: string;
+  versions: string[];
+  /** Station-reported configuration, e.g. "Live Assist mode". */
+  stationConfiguration?: string;
+}
+
+export interface GlossaryTerm {
+  id: string;
+  term: string;
+  aliases: string[];
+  /** Plain-English explanation. */
+  definition: string;
+  status: VerificationStatus;
+  /** Where the explanation comes from. */
+  source: string;
+  relatedEquipmentIds: string[];
 }
 
 export interface KnowledgeArticle {
@@ -156,4 +217,21 @@ export interface KnowledgeArticle {
   review?: ReviewRecord;
   keywords: string[];
   sections: ArticleSection[];
+  /** Browsing category: an equipment category or general help. */
+  category: EquipmentCategoryId | "general";
+  kind: ArticleKind;
+  software?: SoftwareApplicability;
+  /** How presenters might describe the problem, in their own words. */
+  symptoms: string[];
+  /** Questions that help narrow the problem down. Each ends with "?". */
+  diagnosticQuestions: string[];
+  /** Unresolved technical questions — shown separately from guidance. */
+  openQuestions: string[];
+  sources: SourceReference[];
+  relatedArticleIds: string[];
+  /** Troubleshooting topics (src/data/troubleshooting-flows.ts) this article relates to. */
+  relatedTopicIds: string[];
+  glossaryTermIds: string[];
+  /** Newest last. */
+  revisions: ArticleRevision[];
 }

@@ -65,7 +65,7 @@ export const SUPPORT_PROMPT =
 
 const URGENT_SUPPORT_PREFIX = "This is urgent: silence on air has been reported. Tell technical support that first.";
 
-const PROCEDURE_REPLY =
+export const PROCEDURE_REPLY =
   "Radio Technics doesn't have any engineer-approved instructions for that yet, so please don't restart, unplug or reset equipment unless technical support tells you to. I've noted your question for them.";
 
 /* ------------------------------------------------------------------ */

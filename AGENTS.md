@@ -25,7 +25,8 @@ All of these must pass before you hand work back. Report failures honestly, with
 | Content access & validation | `src/lib/content/` | `validateContent()` must return no issues. |
 | Workspace commands & state | `src/lib/workspace/` | Security boundary between troubleshooting logic and UI. |
 | Troubleshooting engine | `src/lib/troubleshooter/` | Pure functions. No React, I/O or randomness in `engine.ts`/`interpret.ts`. |
-| Knowledge search | `src/lib/knowledge/` | |
+| Knowledge search | `src/lib/knowledge/`, `src/data/search-vocabulary.ts` | Local keyword search with concepts and intents; returns only real article/equipment IDs. Not an AI. |
+| AI contract (RT-004) | `src/lib/ai/` | Types and deterministic guards only. No model calls. See `docs/RT-004-AI-ARCHITECTURE.md`. |
 | Session persistence | `src/lib/session/` | Validates everything it restores. |
 | UI components | `src/components/{shell,ui,studio,troubleshooter,knowledge,dashboard,dev}` | Reuse `ui/` primitives. `dev/` is the developer-only hotspot editor. |
 | Scripts | `scripts/` | Photo import (metadata removal, blur) and icon generation. |
@@ -36,7 +37,7 @@ Keep changes focused. Don't reformat or restructure unrelated files. Don't add d
 
 ## Rules for avoiding unverified technical advice
 1. Never invent model numbers, wiring, signal routing, settings, specifications or step-by-step procedures — not in data, UI copy, tests, or documentation.
-2. Mark every fact with a `VerificationStatus`: `verified` (engineer confirmed, with a `review` record: reviewer, date, source), `station-reported` (with a `source`), or `draft`. Default to `draft`. Labels read from photos are `draft` observations with a source.
+2. Mark every fact with a `VerificationStatus`: `verified` (engineer confirmed, with a `review` record: reviewer, date, source), `manufacturer-documented` (summarised from an official source that was actually read — `retrievedOn` set; never a station procedure), `station-reported` (with a `source`), or `draft`. Default to `draft`. Labels read from photos are `draft` observations with a source.
 3. If you need a fact that isn't recorded, add it as a question in the equipment record's `requiresVerification` and in `EQUIPMENT.md` instead of guessing.
 4. Troubleshooting flows may ask questions and collect information. They must end by offering technical support, and must not prescribe a fix unless an engineer-verified procedure exists.
 5. Generic safety cautions (e.g. "don't unplug cables you're unsure about while on air") are acceptable; station-specific instructions are not, until verified.
@@ -45,6 +46,7 @@ Keep changes focused. Don't reformat or restructure unrelated files. Don't add d
 8. Never reset a conversation from typed text, never answer "should I restart…?" with a procedure, and keep possible silence on air as an urgent path.
 9. Never commit photos without running them through `scripts/import-photo.mjs`; redact (not blur) phone numbers and similar, and never show contact details until the station confirms them.
 10. Station-reported operating details (e.g. Myriad 6 in live-assist mode, the green button advancing to the next song) are not procedures. Don't derive instructions from them.
+11. Manufacturer documentation describes general product behaviour; it never authorises a presenter to operate equipment. Write original summaries, never copy text. Don't assume the green button is Myriad's Go function.
 
 ## Adding studio photographs
 See README → "Adding studio photographs".

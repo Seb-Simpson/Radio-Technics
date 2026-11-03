@@ -1,5 +1,40 @@
 # Phase Status
 
+## RT-003 — Knowledge base & intelligent search foundation
+
+**Status:** Implemented and tested. Official Myriad documentation could **not** be read (network policy blocked `www.broadcastradio.com` and `help.broadcastradio.com`); sources are listed as "not yet read" and no manufacturer content was written. Nothing is engineer-verified.
+**Branch:** `claude/rt-003-knowledge-base` from `main` at `2ae5b26`. Not merged, not deployed.
+
+### Commits
+| Commit | Change |
+| --- | --- |
+| `aa16775` | Authority levels (`manufacturer-documented`, article `kind`), sources with `retrievedOn`, glossary, 17 structured articles (9 new Myriad/audio), stricter `validateContent()` |
+| `2657146` | Local search: normalisation, stemming, synonyms, presenter concepts, 16 intents, ranking, ambiguity, needs-equipment, selection context, urgent-silence handling, `KnowledgeRetriever` interface |
+| `fddcdcb` | Knowledge Centre search UI, article page (sources, open questions, related, version history), glossary page, admin review queue, e2e/axe coverage |
+| `c1a393b` | RT-004 AI contract and deterministic guards (no model calls) |
+| (docs commit) | `docs/RT-004-AI-ARCHITECTURE.md`, `docs/ENGINEER_REVIEW.md`, README/AGENTS/CLAUDE/ROADMAP |
+
+### Articles
+Existing (restructured): studio overview, the green next-song button, zoom camera, microphone not heard, next song won't play, can't hear anything, cables, technical support.
+New: Live Assist, the Myriad screen (red/green squares → open question), the next item, stop chains, the Go function and the green button (equivalence **not** assumed), what's playing now, playback status, players, audio output problems. All `informational`; none verified or manufacturer-documented.
+
+### Engineer verification required
+Every article's "Unresolved" questions (listed together on /admin → Review queue), especially: what the red/green squares mean; whether the green button triggers Myriad's Go function; which stop chains are used; what presenters may do when the next item won't play. Read the three official pages once network access allows.
+
+### Automated results (all run on `c1a393b` + docs)
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | pass |
+| `npm test` | 18 files, 393 tests passed |
+| `npm run build` | pass |
+| `npm run test:e2e` | 223 passed (5 widths, incl. axe on /knowledge/kb-myriad-screen and /knowledge/glossary). One earlier full run had a single flake in `studio-regressions.spec.ts:37` at 320px that passed 5/5 on repeat and in the next full run. |
+
+### Limitations
+- Search is keyword/vocabulary-based; phrasings outside the vocabulary fall back to plain keyword ranking or "no match". It is not an AI.
+- Myriad articles are drafts based on station reports; official docs unread.
+- No in-app editing; review is via data files (RT-005).
+- Not yet tested on physical phones.
+
 ## RT-002B — Independent audit remediation (RT-QA-002)
 
 **Status:** All ten RT-QA-002 findings resolved and covered by regression tests. Real-device and engineer verification remain outside this phase.

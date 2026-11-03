@@ -75,7 +75,7 @@ const HYPOTHETICAL_OFF_AIR_REPLY =
 const QUESTION_ONLY_REPLY =
   "I can't check the studio myself, so I can't answer that for you. Please tell me what you can see or hear, or choose an answer below.";
 
-const PROCEDURE_REPLY =
+export const PROCEDURE_REPLY =
   "Radio Technics doesn't have any engineer-approved instructions for that yet, so please don't restart, unplug or reset equipment unless technical support tells you to. I've noted your question for them.";
 
 /* ------------------------------------------------------------------ */

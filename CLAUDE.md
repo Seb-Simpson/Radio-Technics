@@ -32,6 +32,9 @@ Run `npm run check` before every commit, and `npm run test:e2e` after UI changes
 - **Responsive layout**: below 1280px the Studio Explorer uses a bottom sheet (`EquipmentSheet`); below 1024px the shell uses a compact header and menu. Don't pin elements over interactive content on phones (axe target-size / focus-not-obscured).
 - **Hotspots** use fractional regions (0–1) of the image, so they stay aligned at any size or zoom. Use `regionFromPixels` to convert from pixel measurements.
 - Server components must not import plain values from `"use client"` modules — put shared constants in non-client modules (see `src/lib/knowledge/labels.ts`).
+- **Authority levels**: `verified` > `manufacturer-documented` > `station-reported` > `draft`. Articles have `kind` (`informational` / `approved-procedure`); an approved procedure must be verified with review metadata. Manufacturer sources record `retrievedOn` (null = not read) and must not be cited as manufacturer-documented until read. See `docs/ENGINEER_REVIEW.md`.
+- **Knowledge search** (`src/lib/knowledge/search-engine.ts` + `src/data/search-vocabulary.ts`) is local and deterministic (`isAI: false`). Results act through validated workspace commands only. Selection is used only for vague questions. Keep urgent silence handling first.
+- **RT-004** AI may only propose; `src/lib/ai/contracts.ts` (`preModelSafety`, `guardModelProposal`) decides. See `docs/RT-004-AI-ARCHITECTURE.md`.
 - Run `validateContent()` (unit-tested, also shown on /admin) after changing any data file.
 
 ## Safety requirements (non-negotiable)

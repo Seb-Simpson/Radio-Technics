@@ -3,13 +3,15 @@ import { equipment, equipmentCategories } from "@/data/equipment";
 import { hotspots } from "@/data/hotspots";
 import { demoLayoutView, studioPhotos } from "@/data/studio-views";
 import { flowNodes, troubleshootingTopics } from "@/data/troubleshooting-flows";
+import { glossary } from "@/data/glossary";
 import type { FlowNode, TroubleshootingTopic } from "@/lib/troubleshooter/types";
 import type { AudioClaim } from "@/lib/troubleshooter/understand";
+import type { GlossaryTerm, SourceKind } from "@/types";
 import type { EquipmentRecord, Fact, Hotspot, KnowledgeArticle, ReviewRecord, StudioView, VerificationStatus } from "@/types";
 import { validateRegion } from "./geometry";
 
 export interface ContentIssue {
-  area: "equipment" | "views" | "hotspots" | "articles" | "flows" | "topics";
+  area: "equipment" | "views" | "hotspots" | "articles" | "flows" | "topics" | "glossary";
   message: string;
 }
 
@@ -20,6 +22,7 @@ export interface ContentBundle {
   articles: KnowledgeArticle[];
   flowNodes: FlowNode[];
   topics: TroubleshootingTopic[];
+  glossary: GlossaryTerm[];
 }
 
 export const defaultContent: ContentBundle = {
@@ -29,10 +32,11 @@ export const defaultContent: ContentBundle = {
   articles,
   flowNodes,
   topics: troubleshootingTopics,
+  glossary,
 };
 
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const STATUSES: readonly VerificationStatus[] = ["verified", "station-reported", "draft"];
+const STATUSES: readonly VerificationStatus[] = ["verified", "manufacturer-documented", "station-reported", "draft"];
 const AUDIO_CLAIMS: readonly AudioClaim[] = ["present", "absent"];
 /** Values that look like an entry but carry no information. */
 const PLACEHOLDER = /^(tbc|tbd|tba|unknown|n\/?a|none|nil|null|test|testing|todo|pending|placeholder|see above|same|various|misc|other|x+|\?+|-+|\.+|engineer|the engineer|station engineer|staff|someone|me)$/i;
@@ -142,6 +146,7 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
     ["articles", content.articles.map((a) => a.id)],
     ["flows", content.flowNodes.map((n) => n.id)],
     ["topics", content.topics.map((t) => t.id)],
+    ["glossary", content.glossary.map((t) => t.id)],
   ];
   for (const [area, ids] of groups) {
     for (const id of duplicates(ids)) issues.push({ area, message: `Duplicate ID "${id}"` });
@@ -186,19 +191,81 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
   }
 
   /* Articles */
+  const topicIds = new Set(content.topics.map((t) => t.id));
+  const glossaryIds = new Set(content.glossary.map((t) => t.id));
+  const SOURCE_KINDS: readonly SourceKind[] = ["manufacturer", "station", "photograph", "engineer", "development-team"];
   for (const article of content.articles) {
+    const a = (messages: string[]) => add("articles", messages);
     for (const equipmentId of article.equipmentIds) {
-      if (!equipmentIds.has(equipmentId)) add("articles", [`${article.id} references missing equipment "${equipmentId}"`]);
+      if (!equipmentIds.has(equipmentId)) a([`${article.id} references missing equipment "${equipmentId}"`]);
     }
-    add("articles", checkVerification(article.id, article.status, article.review, now));
+    a(checkVerification(article.id, article.status, article.review, now));
+    if (article.category !== "general" && !categoryIds.has(article.category)) a([`${article.id} has unknown category "${article.category}"`]);
+
+    // Sources: each must be well-formed; manufacturer sources only count once actually read.
+    const sourceById = new Map(article.sources.map((src) => [src.id, src]));
+    if (article.sources.length === 0) a([`${article.id} has no sources`]);
+    for (const id of duplicates(article.sources.map((src) => src.id))) a([`${article.id} lists source "${id}" twice`]);
+    for (const src of article.sources) {
+      if (!SOURCE_KINDS.includes(src.kind)) a([`${article.id} source "${src.id}" has unknown kind "${String(src.kind)}"`]);
+      if (src.url !== undefined && !/^(https:\/\/|\/)/.test(src.url)) a([`${article.id} source "${src.id}" must use an https:// or site-relative URL`]);
+      if (src.kind === "manufacturer" && !src.url) a([`${article.id} manufacturer source "${src.id}" needs its official URL`]);
+      if (src.retrievedOn !== null && (!isValidIsoDate(src.retrievedOn) || src.retrievedOn > todayIso(now))) {
+        a([`${article.id} source "${src.id}" has an invalid retrieval date`]);
+      }
+      if (!isMeaningfulProvenance(src.publisher)) a([`${article.id} source "${src.id}" needs a meaningful publisher`]);
+    }
+    const citesReadManufacturer = (ids: string[] | undefined) =>
+      (ids ?? []).some((id) => sourceById.get(id)?.kind === "manufacturer" && sourceById.get(id)?.retrievedOn !== null);
+
     article.sections.forEach((section, i) => {
       const label = `${article.id} section ${i + 1} ("${section.heading}")`;
-      add("articles", checkVerification(label, section.status, section.review ?? (section.status === "verified" ? article.review : undefined), now));
-      if (article.status === "verified" && section.status !== "verified") {
-        add("articles", [`${article.id} is marked verified but ${label} is not`]);
+      a(checkVerification(label, section.status, section.review ?? (section.status === "verified" ? article.review : undefined), now));
+      if (article.status === "verified" && section.status !== "verified") a([`${article.id} is marked verified but ${label} is not`]);
+      if (section.body.length === 0) a([`${label} is empty`]);
+      for (const id of section.sourceIds ?? []) {
+        if (!sourceById.has(id)) a([`${label} cites source "${id}" that the article doesn't list`]);
       }
-      if (section.body.length === 0) add("articles", [`${label} is empty`]);
+      // Manufacturer authority needs a manufacturer source that someone has actually read.
+      if (section.status === "manufacturer-documented" && !citesReadManufacturer(section.sourceIds)) {
+        a([`${label} is marked manufacturer-documented but cites no manufacturer source that has been read`]);
+      }
     });
+    if (article.status === "manufacturer-documented" && !article.sections.some((sec) => citesReadManufacturer(sec.sourceIds))) {
+      a([`${article.id} is marked manufacturer-documented but cites no manufacturer source that has been read`]);
+    }
+
+    // Only engineer-approved content may be presented as a procedure.
+    if (article.kind === "approved-procedure") {
+      if (article.status !== "verified" || !article.review) a([`${article.id} is an approved procedure but is not engineer-verified with a review`]);
+      if (article.sections.some((sec) => sec.status !== "verified")) a([`${article.id} is an approved procedure but contains sections that are not engineer-verified`]);
+    }
+
+    for (const q of article.diagnosticQuestions) if (!q.trim().endsWith("?")) a([`${article.id} diagnostic question is not a question: "${q}"`]);
+    for (const id of article.relatedArticleIds) {
+      if (id === article.id) a([`${article.id} lists itself as related`]);
+      else if (!articleIds.has(id)) a([`${article.id} links to missing related article "${id}"`]);
+    }
+    for (const id of article.relatedTopicIds) if (!topicIds.has(id)) a([`${article.id} links to missing troubleshooting topic "${id}"`]);
+    for (const id of article.glossaryTermIds) if (!glossaryIds.has(id)) a([`${article.id} links to missing glossary term "${id}"`]);
+    if (article.software && article.software.versions.length === 0) a([`${article.id} names software without versions`]);
+    if (article.revisions.length === 0) a([`${article.id} has no version history`]);
+    article.revisions.forEach((rev, i) => {
+      if (!isValidIsoDate(rev.date) || rev.date > todayIso(now)) a([`${article.id} revision ${i + 1} has an invalid date`]);
+      if (i > 0 && rev.date < article.revisions[i - 1]!.date) a([`${article.id} revisions are out of order`]);
+      if (!isMeaningfulProvenance(rev.author)) a([`${article.id} revision ${i + 1} needs a meaningful author`]);
+    });
+  }
+
+  /* Glossary */
+  for (const term of content.glossary) {
+    // Glossary terms carry no review records, so they cannot claim engineer or manufacturer authority yet.
+    if (term.status === "verified" || term.status === "manufacturer-documented") {
+      add("glossary", [`${term.id} cannot be "${term.status}" without review records or cited manufacturer sources`]);
+    }
+    if (!term.definition.trim()) add("glossary", [`${term.id} has no definition`]);
+    if (!isMeaningfulProvenance(term.source)) add("glossary", [`${term.id} needs a meaningful source`]);
+    for (const id of term.relatedEquipmentIds) if (!equipmentIds.has(id)) add("glossary", [`${term.id} references missing equipment "${id}"`]);
   }
 
   /* Flows */

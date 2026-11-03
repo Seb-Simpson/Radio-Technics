@@ -34,7 +34,7 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
 });
 
-for (const path of ["/", "/studio", "/dev/hotspots", "/troubleshooter", "/knowledge", "/knowledge/guide-green-button", "/knowledge/ts-next-song-wont-play", "/admin"]) {
+for (const path of ["/", "/studio", "/dev/hotspots", "/troubleshooter", "/knowledge", "/knowledge/guide-green-button", "/knowledge/ts-next-song-wont-play", "/knowledge/kb-myriad-screen", "/knowledge/glossary", "/admin"]) {
   test(`no WCAG A/AA violations: ${path}`, async ({ page }) => {
     await page.goto(path);
     await expectNoAxeViolations(page, path);
@@ -75,7 +75,7 @@ test("chat log uses valid list semantics and can be focused for scrolling", asyn
 test("article sections are labelled by their headings", async ({ page }) => {
   await page.goto("/knowledge/guide-green-button");
   await expect(page.getByRole("region", { name: "What it does" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Awaiting engineer confirmation" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Unresolved — waiting for the station engineer" })).toBeVisible();
 });
 
 test("keyboard focus is visible on interactive elements", async ({ page }) => {

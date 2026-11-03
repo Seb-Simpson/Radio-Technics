@@ -28,7 +28,7 @@ describe("Studio Explorer", () => {
     expect(within(panel).getByText("Advances Myriad to the next song.")).toBeInTheDocument();
     expect(within(panel).getByText("Button appears unresponsive", { exact: false })).toBeInTheDocument();
     expect(within(panel).getByText(/How the button is connected to Myriad/)).toBeInTheDocument();
-    expect(within(panel).getByRole("link", { name: /The green Myriad button/ })).toHaveAttribute("href", "/knowledge/guide-green-button");
+    expect(within(panel).getByRole("link", { name: /The green next-song button/ })).toHaveAttribute("href", "/knowledge/guide-green-button");
     expect(within(panel).getAllByText("Station reported").length).toBeGreaterThan(0);
   });
 

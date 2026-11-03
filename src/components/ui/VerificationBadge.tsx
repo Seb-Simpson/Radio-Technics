@@ -1,9 +1,13 @@
-import { BadgeCheck, CircleDashed, MessageSquareQuote } from "lucide-react";
+import { BadgeCheck, BookText, CircleDashed, MessageSquareQuote } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { VerificationStatus } from "@/types";
 
 export const verificationLabels: Record<VerificationStatus, { label: string; description: string }> = {
-  verified: { label: "Engineer verified", description: "Confirmed by the station engineer." },
+  verified: { label: "Engineer verified", description: "Confirmed by the station engineer for this studio." },
+  "manufacturer-documented": {
+    label: "Manufacturer documentation",
+    description: "Summarised from the manufacturer's official documentation. Describes the product in general — not an approved station procedure.",
+  },
   "station-reported": {
     label: "Station reported",
     description: "Reported by station staff. Not yet confirmed by the engineer.",
@@ -13,11 +17,12 @@ export const verificationLabels: Record<VerificationStatus, { label: string; des
 
 const styles: Record<VerificationStatus, string> = {
   verified: "border-signal-500/40 bg-signal-900/60 text-signal-300",
+  "manufacturer-documented": "border-sky-400/35 bg-sky-950/50 text-sky-200",
   "station-reported": "border-ink-500/60 bg-ink-750 text-ink-200",
   draft: "border-caution-400/35 bg-caution-900/50 text-caution-300",
 };
 
-const icons = { verified: BadgeCheck, "station-reported": MessageSquareQuote, draft: CircleDashed };
+const icons = { verified: BadgeCheck, "manufacturer-documented": BookText, "station-reported": MessageSquareQuote, draft: CircleDashed };
 
 export function VerificationBadge({
   status,

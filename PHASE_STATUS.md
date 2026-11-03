@@ -165,3 +165,8 @@ Manual checks:
 8. **Mobile (DevTools device mode, 375px):** menu, *Get help*, chat, *Show me where* → highlighted item above the bottom sheet → *Back to conversation*.
 9. **Validation:** set any fact's status to `"verified"` in `src/data/equipment.ts` without a `review`. `npm test` fails with a clear message.
 10. **Editor:** `npm run dev` → `/dev/hotspots`. In a production build (`npm run build && npm start` without the env var) it returns 404.
+
+## RT-002C — RT-QA-002B remediation
+
+**Status:** Priority 1–3 findings addressed with regression tests; see `docs/RT-002C-REMEDIATION.md` for causes, before/after evidence and full results. The unredacted rack photo is **still reachable through GitHub's `refs/pull/2/head`** and possibly old Vercel previews. The owner needs to contact GitHub Support and Vercel (`docs/SECURITY-PHOTO-EXPOSURE.md`).
+**Branch:** `fix/rt-002c-qa002b` from `2ae5b26`. Not merged, not deployed.

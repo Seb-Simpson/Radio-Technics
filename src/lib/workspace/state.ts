@@ -9,6 +9,11 @@ export interface WorkspaceState {
   activeViewId: string | null;
   /** Changes whenever the viewer should zoom to an equipment item. */
   focusRequest: { equipmentId: string; token: number } | null;
+  /**
+   * Counts select_equipment commands, so choosing the SAME item again is still
+   * seen as a deliberate action (it renews the session's activity time).
+   */
+  selectionSeq: number;
 }
 
 export const initialWorkspaceState: WorkspaceState = {
@@ -17,6 +22,7 @@ export const initialWorkspaceState: WorkspaceState = {
   highlightedEquipmentId: null,
   activeViewId: null,
   focusRequest: null,
+  selectionSeq: 0,
 };
 
 function viewShowsEquipment(viewId: string | null, equipmentId: string): boolean {
@@ -35,6 +41,7 @@ export function workspaceReducer(state: WorkspaceState, command: WorkspaceComman
         ...state,
         selectedEquipmentId: command.equipmentId,
         selectedHotspotId: command.hotspotId ?? null,
+        selectionSeq: state.selectionSeq + 1,
         highlightedEquipmentId:
           state.highlightedEquipmentId === command.equipmentId ? state.highlightedEquipmentId : null,
       };

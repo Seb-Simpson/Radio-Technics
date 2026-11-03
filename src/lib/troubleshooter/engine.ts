@@ -64,6 +64,16 @@ export const SUPPORT_PROMPT =
   "Please contact the station's technical support. Their contact details have not been configured in Radio Technics yet \u2014 the station needs to provide them. You can read out or copy the summary below.";
 
 const URGENT_SUPPORT_PREFIX = "This is urgent: silence on air has been reported. Tell technical support that first.";
+const POSSIBLE_URGENT_SUPPORT_PREFIX =
+  "This is being treated as urgent: the station may be silent on air (not confirmed). Tell technical support that first.";
+
+/** RT-QA-002B: an uncertain or asked-about off-air report is escalated, but recorded as unconfirmed. */
+const POSSIBLE_OFF_AIR_NOTE =
+  "You're not certain, so I've recorded this as possible silence on air, not confirmed. To be safe, it's being treated as urgent.";
+const HYPOTHETICAL_OFF_AIR_REPLY =
+  "If the station ever goes silent on air, treat it as urgent and contact technical support straight away. I haven't recorded that anything is wrong now.";
+const QUESTION_ONLY_REPLY =
+  "I can't check the studio myself, so I can't answer that for you. Please tell me what you can see or hear, or choose an answer below.";
 
 const PROCEDURE_REPLY =
   "Radio Technics doesn't have any engineer-approved instructions for that yet, so please don't restart, unplug or reset equipment unless technical support tells you to. I've noted your question for them.";
@@ -165,7 +175,9 @@ export function describeStep(state: ConversationState): StepView {
     case "support":
       return {
         kind: "support",
-        prompt: state.urgent ? `${URGENT_SUPPORT_PREFIX} ${SUPPORT_PROMPT}` : SUPPORT_PROMPT,
+        prompt: state.urgent
+          ? `${state.confirmedOffAir ? URGENT_SUPPORT_PREFIX : POSSIBLE_URGENT_SUPPORT_PREFIX} ${SUPPORT_PROMPT}`
+          : SUPPORT_PROMPT,
         urgent: state.urgent,
         options: [
           { id: "back", label: "Go back to my last question", kind: "back" },
@@ -208,6 +220,7 @@ export function createConversation(): ConversationState {
     observations: [],
     urgent: false,
     possibleSilence: false,
+    confirmedOffAir: false,
     seq: 0,
   };
   return addMessage(base, { role: "assistant", text: GREETING });
@@ -403,13 +416,17 @@ function handleText(state: ConversationState, rawText: string, context: EngineCo
 
   // 1. Safety first: classify urgency and attach it to the session BEFORE any
   //    routing, so it survives whatever else the message asks for.
-  if (u.clearAirSilence) s = { ...s, urgent: true };
+  //    Confirmed = stated as fact. Possible (asked, hedged, uncertain or partly
+  //    corrected) is escalated just the same, but recorded as unconfirmed.
+  if (u.offAir === "confirmed") s = { ...s, urgent: true, confirmedOffAir: true };
+  else if (u.offAir === "possible") s = { ...s, urgent: true, possibleSilence: true };
   else if (u.signals.includes("silence") || u.signals.includes("on-air-unknown")) s = { ...s, possibleSilence: true };
 
-  // 2. Confirmed off-air silence goes to the urgent state, even when the message
-  //    also asks for a person or about a procedure (both are answered there).
-  if (u.clearAirSilence) {
+  // 2. Off-air reports go to the urgent state, even when the message also asks
+  //    for a person or about a procedure (both are answered there).
+  if (u.offAir) {
     const preface = [
+      u.offAir === "possible" ? POSSIBLE_OFF_AIR_NOTE : null,
       u.procedureQuestion ? PROCEDURE_REPLY : null,
       u.helpRequest ? "I've marked this as urgent for technical support." : null,
     ].filter(Boolean).join(" ");
@@ -428,6 +445,9 @@ function handleText(state: ConversationState, rawText: string, context: EngineCo
     }
     return reask(s, PROCEDURE_REPLY);
   }
+
+  // 4b. "What if we go off air?" is not a report: answer it and record nothing.
+  if (u.hypotheticalOffAir && !u.assertive) return reask(s, HYPOTHETICAL_OFF_AIR_REPLY);
 
   // 4. Typed "start again" never clears the conversation by itself.
   if (RESTART_WORDS.includes(u.normalised.replace(/[.!?]+$/, ""))) {
@@ -481,6 +501,8 @@ interface OptionFit {
   stanceMatch: boolean;
   /** The user said something this option contradicts. */
   contradicted: boolean;
+  /** The user's statement uses one of this option's own phrases ("they move"). */
+  claimed: boolean;
 }
 
 function fitOption(option: FlowOption, u: Understanding): OptionFit {
@@ -496,8 +518,10 @@ function fitOption(option: FlowOption, u: Understanding): OptionFit {
     if (option.audio === u.audio) score += 3;
     else contradicted = true;
   }
-  if (option.match?.some((phrase) => hasPhrase(u.normalised, normaliseReply(phrase), true))) score += 2;
-  return { option, score, stanceMatch, contradicted };
+  // Only statements count: "Do they move?" doesn't claim that they move.
+  const claimed = Boolean(u.assertive) && Boolean(option.match?.some((phrase) => hasPhrase(u.assertive, normaliseReply(phrase), true)));
+  if (claimed) score += 2;
+  return { option, score, stanceMatch, contradicted, claimed };
 }
 
 function replyToNode(state: ConversationState, node: FlowNode, u: Understanding): EngineResult {
@@ -506,9 +530,23 @@ function replyToNode(state: ConversationState, node: FlowNode, u: Understanding)
     const s = recordAnswer(state, "Unsure whether the station is on air", typedMeta(u, "uncertain"));
     return goToNode(say(s, "Let's check that first."), ON_AIR_CHECK_NODE);
   }
+  // Uncertain or asked-about silence is checked before anything is recorded.
+  if (u.signals.includes("silence") && !u.audio && !node.broadcastCheck && (u.stance === "uncertain" || !u.assertive)) {
+    return goToNode(say(state, "That sounds like there may be silence. Let me check that first."), ON_AIR_CHECK_NODE);
+  }
   if (u.stance === "uncertain" && !u.audio) return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
+  // A question or hypothetical on its own answers nothing.
+  if (!u.assertive && u.stance === "none" && !u.audio) return reask(state, u.isQuestion ? QUESTION_ONLY_REPLY : "Thanks \u2014 I've noted that. To carry on, please choose one of the answers below.");
 
   const fits = node.options.map((option) => fitOption(option, u));
+  // RT-QA-002B: a leading "yes"/"no" never wins over the rest of the sentence.
+  // "Yes, they don't move" / "No, they're moving" / "Yes, it wasn't working".
+  const prefixContradicted =
+    fits.some((f) => f.claimed && f.contradicted) || (u.stance === "affirm" && u.negatedPredicate && !u.audio && node.options.some((o) => o.answer));
+  if (prefixContradicted) {
+    const said = u.stance === "affirm" ? "yes" : "no";
+    return reask(state, `You said ${said}, but the rest of your message seems to say the opposite, so I won't record an answer yet.`);
+  }
   const usable = fits.filter((f) => !f.contradicted && f.score >= 2).sort((a, b) => b.score - a.score);
   const [best, second] = usable;
 
@@ -547,7 +585,14 @@ function replyToConfirm(state: ConversationState, equipmentId: string, u: Unders
   if (u.stance === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
   if (u.stance === "conflict") return reask(state, "I'm not sure whether you meant yes or no.");
   const options = describeStep(state).options;
+  if (!u.assertive && u.stance === "none") return reask(state, QUESTION_ONLY_REPLY);
   const other = interpret(u.text);
+  if (u.stance === "affirm" && other.kind === "equipment" && other.equipmentId !== equipmentId) {
+    // "Yes, it's the guest mic" while confirming another item: never assume either.
+    const named = getEquipmentById(other.equipmentId);
+    const s = say(state, `You said yes, but also mentioned the ${named?.shortName ?? "other equipment"}, so I won't assume which you mean.`);
+    return { state: enterStep(s, { kind: "choose", equipmentIds: [equipmentId, other.equipmentId], reason: "ambiguous" }), commands: [] };
+  }
   if (u.stance !== "affirm" && other.kind === "equipment" && other.equipmentId !== equipmentId) {
     // "No, it's the guest mic" — check the newly named item instead.
     const s = recordAnswer(state, "No, something else", typedMeta(u));
@@ -599,7 +644,8 @@ function describeNewProblem(state: ConversationState, u: Understanding, context:
 export function buildSupportSummary(state: ConversationState): string {
   const record = getEquipmentById(state.equipmentId);
   const lines = ["Radio Technics \u2014 problem summary (prototype, scripted)"];
-  if (state.urgent) lines.push("URGENT: silence on air reported");
+  if (state.urgent && state.confirmedOffAir) lines.push("URGENT: silence on air reported");
+  else if (state.urgent) lines.push("URGENT (precaution): possible silence on air \u2014 not confirmed by the presenter");
   else if (state.possibleSilence) lines.push("Possible silence reported (not confirmed) \u2014 check whether the station is on air");
   lines.push(`Equipment: ${record ? record.name : "not identified yet"}`);
 

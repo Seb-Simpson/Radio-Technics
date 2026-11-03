@@ -110,6 +110,12 @@ export interface ConversationState {
   urgent: boolean;
   /** Set when the user described possible silence that hasn't been confirmed. Never cleared automatically. */
   possibleSilence: boolean;
+  /**
+   * RT-QA-002B: true only when the presenter stated as fact that the station is
+   * off air. `urgent` without this means silence is possible but unconfirmed and
+   * is being treated as urgent as a precaution. Never cleared automatically.
+   */
+  confirmedOffAir: boolean;
   /** Monotonic counter for message IDs (keeps the engine pure and deterministic). */
   seq: number;
 }

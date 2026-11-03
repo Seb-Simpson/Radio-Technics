@@ -26,6 +26,7 @@ export function Troubleshooter() {
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const focusOptionsNext = useRef(false);
   const [showEmbedded, setShowEmbedded] = useState(false);
@@ -104,11 +105,17 @@ export function Troubleshooter() {
     event?.preventDefault();
     if (!draft.trim()) {
       setInputError("Type a short description of the problem first.");
+      requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
       return;
     }
     setInputError(null);
     // If the session had expired it is cleared and the message is not sent; keep the text so it can be resent.
-    if (send({ type: "text", text: draft })) setDraft("");
+    if (send({ type: "text", text: draft })) {
+      setDraft("");
+      // Where the page flows (phones, short windows) new messages push the reply box
+      // down; keep it on screen so the conversation can continue.
+      requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -122,7 +129,7 @@ export function Troubleshooter() {
         // Phones/tablets: the conversation flows with the page so it gets the whole screen.
         className="flex flex-col overflow-clip rounded-xl border border-ink-750 bg-ink-900 xl:tall:h-[calc(100dvh-13rem)]"
       >
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-750 px-4 py-3 sm:px-5">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-750 px-4 py-3 sm:px-5 xl:tall:shrink-0">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <span className="rounded border border-caution-400/30 bg-caution-900/40 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wider text-caution-300 uppercase">
               Prototype
@@ -144,6 +151,12 @@ export function Troubleshooter() {
           </button>
         </header>
 
+        {/*
+          RT-QA-002B: in the fixed-height layout the header, notices and reply box keep
+          their size; notices scroll if there are many, and the answers area shrinks
+          and scrolls, so the reply box is never pushed out of the panel.
+        */}
+        <div className="xl:tall:max-h-[35%] xl:tall:shrink-0 xl:tall:overflow-y-auto">
         {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
 
         {/* Urgency stays visible whatever step the conversation is on. */}
@@ -215,6 +228,8 @@ export function Troubleshooter() {
           </div>
         )}
 
+        </div>
+
         {/* role="log" sits on a wrapper so the list keeps valid list semantics; it is focusable so keyboard users can scroll it. */}
         <div
           ref={logRef}
@@ -222,7 +237,7 @@ export function Troubleshooter() {
           aria-live="polite"
           aria-label="Conversation"
           tabIndex={0}
-          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:tall:flex-1 xl:tall:overflow-y-auto xl:tall:scroll-smooth"
+          className="px-4 py-5 focus-visible:outline-offset-[-2px] sm:px-5 xl:tall:min-h-24 xl:tall:flex-1 xl:tall:overflow-y-auto xl:tall:scroll-smooth"
         >
           <ol className="flex flex-col gap-3">
             {conversation.messages.map((message) => (
@@ -231,7 +246,7 @@ export function Troubleshooter() {
           </ol>
         </div>
 
-        <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-3 sm:px-5">
+        <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-3 sm:px-5 xl:tall:min-h-0 xl:tall:shrink xl:tall:overflow-y-auto">
           {showSummary && <SupportSummary text={buildSupportSummary(conversation)} />}
 
           <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses">
@@ -279,10 +294,11 @@ export function Troubleshooter() {
         </div>
 
           <form
+            ref={formRef}
             onSubmit={submit}
             // Not sticky on phones: a pinned box would cover answer buttons (WCAG 2.4.11 / 2.5.8).
             // Focusing it brings it above the on-screen keyboard.
-            className="scroll-mb-4 border-t border-ink-750 bg-ink-900 px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 xl:pb-4"
+            className="scroll-mb-4 border-t border-ink-750 bg-ink-900 px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 xl:pb-4 xl:tall:shrink-0"
           >
             <label htmlFor="troubleshooter-input" className="sr-only">
               Describe the problem

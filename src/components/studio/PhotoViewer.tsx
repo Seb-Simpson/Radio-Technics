@@ -146,20 +146,34 @@ export function PhotoViewer({
     [view.width, view.height, viewport],
   );
 
-  // When the stage changes size, rescale and re-clamp the pan, and keep the
-  // selected equipment on screen (RT-QA-001 B1).
+  // The exact region the user chose; otherwise the first region for the selected equipment.
+  const selectedHotspot = useMemo(
+    () => (selectedHotspotId ? hotspots.find((h) => h.id === selectedHotspotId) : undefined) ?? hotspots.find((h) => h.equipmentId === selectedEquipmentId),
+    [hotspots, selectedHotspotId, selectedEquipmentId],
+  );
+
+  // When the stage OR the visible area changes size, rescale and re-clamp the
+  // pan, and keep the selected hotspot on screen (RT-QA-001 B1, RT-QA-002B).
+  // A narrower window can leave the (height-limited) stage the same size while
+  // hiding part of it, so the viewport is tracked too.
   const previousStage = useRef<Size>(stage);
+  const previousViewport = useRef<Size>(viewport);
   useEffect(() => {
     const before = previousStage.current;
+    const beforeViewport = previousViewport.current;
     previousStage.current = stage;
-    if (before.width === stage.width && before.height === stage.height) return;
+    previousViewport.current = viewport;
+    const stageSame = before.width === stage.width && before.height === stage.height;
+    const viewportSame = beforeViewport.width === viewport.width && beforeViewport.height === viewport.height;
+    if (stageSame && viewportSame) return;
     setTransform((t) => {
       let next = adaptTransformToResize(t, before, stage, viewport);
-      const selected = hotspots.find((h) => h.equipmentId === selectedEquipmentId);
-      if (selected && stage.width > 0) next = keepRegionVisible(selected.region, next, stage, viewport);
+      if (selectedHotspot && stage.width > 0) next = keepRegionVisible(selectedHotspot.region, next, stage, viewport);
       return next;
     });
-  }, [stage, viewport, hotspots, selectedEquipmentId]);
+    // Only size changes trigger this; selection changes must not pan the photo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, viewport]);
 
   // Measure the viewport and keep the stage fitted on resize.
   useIsomorphicLayoutEffect(() => {
@@ -194,11 +208,13 @@ export function PhotoViewer({
   useEffect(() => {
     if (!focusRequest || stage.width === 0) return;
     if (handledFocusToken.current === focusRequest.token) return;
-    const target = hotspots.find((h) => h.equipmentId === focusRequest.equipmentId);
+    const target =
+      (selectedHotspot?.equipmentId === focusRequest.equipmentId ? selectedHotspot : undefined) ??
+      hotspots.find((h) => h.equipmentId === focusRequest.equipmentId);
     if (!target) return;
     handledFocusToken.current = focusRequest.token;
     update(focusTransform(target.region, stage));
-  }, [focusRequest, hotspots, stage, update]);
+  }, [focusRequest, hotspots, stage, update, selectedHotspot]);
 
   const zoomBy = useCallback(
     (factor: number, point = { x: 0, y: 0 }) => {
@@ -220,8 +236,13 @@ export function PhotoViewer({
       setInstant(true);
       setTransform(next);
     }
-    // Let React apply the pan, then let the page account for overlays.
-    requestAnimationFrame(() => requestAnimationFrame(() => onHotspotFocusVisible?.(element)));
+    // Let React apply the pan, then let the page account for overlays — unless
+    // focus has moved on in the meantime (a stale reveal must not scroll away from it).
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (document.activeElement === element) onHotspotFocusVisible?.(element);
+      }),
+    );
   };
 
   const relativeToCentre = useCallback((clientX: number, clientY: number) => {
@@ -521,6 +542,7 @@ function HotspotButton({
     <button
       type="button"
       data-equipment-id={record.id}
+      data-hotspot-id={hotspot.id}
       data-selected={selected || undefined}
       data-highlighted={highlighted || undefined}
       aria-pressed={selected}

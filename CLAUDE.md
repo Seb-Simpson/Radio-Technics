@@ -41,6 +41,7 @@ Run `npm run check` before every commit, and `npm run test:e2e` after UI changes
 - Typed text must never reset a conversation. Clearing only happens through the confirmed **End session** action.
 - Questions about restarting/unplugging equipment get the safe "no approved instructions" reply; never add recovery procedures without verification.
 - Possible silence on air must stay a priority path (see `understand.ts` signals and `outcome-urgent`).
+- Only statements record facts: questions, hypotheticals and strong uncertainty never become observations or answers (`understand.ts` clause modality). Keep `offAir` "confirmed" vs "possible" apart (`confirmedOffAir`); both escalate, only stated fact is summarised as confirmed. Politeness ("sorry", "hang on") is not a correction. A yes/no word never overrides the rest of the sentence (RT-QA-002B).
 - Photos must be imported with `scripts/import-photo.mjs` (strips metadata; `--blur` for names on screens, `--redact` for anything that must be unreadable such as phone numbers).
 - Review records and provenance must be meaningful (no TBC/n/a placeholders). Validation cannot prove genuine approval; never claim it does.
 - Troubleshooting flows gather information; they must not prescribe fixes unless a verified procedure exists.

@@ -60,10 +60,12 @@ describe("scenario 1 — vague description", () => {
       expect.arrayContaining(["Green Myriad button", "I'm not sure", "Show me where", "I need technical support"]),
     );
 
-    // Identify by text…
+    // Identify by text… (RT-002D: identity from typed words is confirmed first)
     const byText = say(state, "the mixing desk");
-    expect(byText.state.step).toEqual({ kind: "node", nodeId: "generic-symptom" });
-    expect(lastAssistant(byText.state)).toBe("What's happening with the mixing console?");
+    expect(byText.state.step).toEqual({ kind: "confirm", equipmentId: "mixing-console" });
+    const confirmed = respond(byText.state, { type: "option", optionId: "confirm:yes" }, noSelection);
+    expect(confirmed.state.step).toEqual({ kind: "node", nodeId: "generic-symptom" });
+    expect(lastAssistant(confirmed.state)).toBe("What's happening with the mixing console?");
 
     // …or by selecting in the Studio Explorer.
     ({ state } = respond(state, { type: "equipment", equipmentId: "green-next-button" }, noSelection));

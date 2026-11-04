@@ -16,7 +16,9 @@ import type {
   StepView,
   UserInput,
 } from "./types";
-import { hasPhrase, isContradictory, normaliseReply, understand, type Understanding } from "./understand";
+import { claimValue, extractClaims, type ClaimSubject } from "./claims";
+import { isCurrentConcern, type BroadcastAssessment } from "./safety";
+import { hasPhrase, normaliseReply, understand, type Understanding } from "./understand";
 
 /**
  * Deterministic troubleshooting engine (prototype — not AI).
@@ -72,6 +74,12 @@ const POSSIBLE_OFF_AIR_NOTE =
   "You're not certain, so I've recorded this as possible silence on air, not confirmed. To be safe, it's being treated as urgent.";
 const HYPOTHETICAL_OFF_AIR_REPLY =
   "If the station ever goes silent on air, treat it as urgent and contact technical support straight away. I haven't recorded that anything is wrong now.";
+const HISTORICAL_OFF_AIR_NOTE =
+  "Thanks \u2014 I've noted that the station was off air earlier and that you say it's back now. I haven't recorded it as a current problem. If it happens again, say so straight away.";
+const DENIED_OFF_AIR_NOTE = "Thanks \u2014 I've noted that the station is not off air.";
+const POSSIBLE_SILENCE_PENDING_NOTE =
+  "If there's silence, that needs attention straight away \u2014 I'm treating it as possible silence on air (not confirmed) while we check.";
+const NOTED_REPLY = "Thanks \u2014 I've noted that for technical support. To carry on, please choose one of the answers below.";
 const QUESTION_ONLY_REPLY =
   "I can't check the studio myself, so I can't answer that for you. Please tell me what you can see or hear, or choose an answer below.";
 
@@ -142,6 +150,27 @@ export function describeStep(state: ConversationState): StepView {
           ...UNIVERSAL_OPTIONS,
         ],
         equipmentId,
+      };
+    }
+    case "check": {
+      // RT-002D: a tentative interpretation waiting for the presenter to confirm it.
+      const node = nodesById.get(step.nodeId);
+      const candidate = node?.options.find((o) => o.id === step.optionId);
+      if (!node || !candidate) {
+        return { kind: "outcome", prompt: "Something went wrong with this conversation.", options: [SUPPORT_OPTION, RESTART_OPTION], equipmentId: null };
+      }
+      const restated = candidate.restate ? fillTemplate(candidate.restate, state.equipmentId) : `\u201c${candidate.label}\u201d`;
+      return {
+        kind: "question",
+        prompt: `It sounds like ${restated}. Is that correct?`,
+        help: `I haven't recorded anything yet. The question was: \u201c${fillTemplate(node.prompt, state.equipmentId)}\u201d`,
+        options: [
+          // The proposed answer first, then every other real answer.
+          { id: `opt:${candidate.id}`, label: candidate.label, kind: "answer" as const },
+          ...node.options.filter((o) => o.id !== candidate.id).map((o) => ({ id: `opt:${o.id}`, label: o.label, kind: "answer" as const })),
+          ...UNIVERSAL_OPTIONS,
+        ],
+        equipmentId: node.showEquipmentId ?? state.equipmentId,
       };
     }
     case "confirm": {
@@ -221,6 +250,7 @@ export function createConversation(): ConversationState {
     urgent: false,
     possibleSilence: false,
     confirmedOffAir: false,
+    broadcastReports: [],
     seq: 0,
   };
   return addMessage(base, { role: "assistant", text: GREETING });
@@ -246,9 +276,35 @@ export function respond(state: ConversationState, input: UserInput, context: Eng
 type AnswerMeta = Pick<AnsweredQuestion, "source" | "certainty" | "typedText">;
 const BUTTON: AnswerMeta = { source: "button", certainty: "confirmed" };
 
-function recordAnswer(state: ConversationState, answer: string, meta: AnswerMeta): ConversationState {
-  const question = describeStep(state).prompt;
-  return { ...state, answers: [...state.answers, { question, answer, ...meta }] };
+/** The question a step asks, for answer provenance. A check step asks its node's question. */
+function questionIdOf(step: Step): string {
+  switch (step.kind) {
+    case "node":
+    case "check":
+      return step.nodeId;
+    case "confirm":
+      return `confirm:${step.equipmentId}`;
+    case "choose":
+      return "choose";
+    case "start":
+      return "start";
+    case "support":
+      return "support";
+  }
+}
+
+/** The underlying question's prompt (a check step quotes its node's question). */
+function questionPrompt(state: ConversationState): string {
+  if (state.step.kind === "check") {
+    const node = nodesById.get(state.step.nodeId);
+    return node ? fillTemplate(node.prompt, state.equipmentId) : describeStep(state).prompt;
+  }
+  return describeStep(state).prompt;
+}
+
+function recordAnswer(state: ConversationState, optionId: string, answer: string, meta: AnswerMeta): ConversationState {
+  const entry: AnsweredQuestion = { questionId: questionIdOf(state.step), optionId, question: questionPrompt(state), answer, ...meta };
+  return { ...state, answers: [...state.answers, entry] };
 }
 
 function recordObservation(state: ConversationState, text: string, inReplyTo: string | null): ConversationState {
@@ -296,12 +352,17 @@ function handleOption(state: ConversationState, optionId: string): EngineResult 
   if (option.id === "restart") return { state: createConversation(), commands: [] };
 
   const s = addMessage(state, { role: "user", text: option.label });
+  // Pressing the answer the system proposed confirms that interpretation of the presenter's words.
+  if (state.step.kind === "check" && option.id === `opt:${state.step.optionId}`) {
+    return applyChoice(s, option, confirmedMeta(state.step.basedOn));
+  }
   return applyChoice(s, option, BUTTON);
 }
 
 /**
  * Apply a chosen option. `state` already contains the user's message;
- * `state.step` is still the step the option belongs to.
+ * `state.step` is still the step the option belongs to. This is the ONLY
+ * place answers are recorded.
  */
 function applyChoice(state: ConversationState, option: StepOption, meta: AnswerMeta): EngineResult {
   const view = describeStep(state);
@@ -315,10 +376,10 @@ function applyChoice(state: ConversationState, option: StepOption, meta: AnswerM
     case "u-show":
       return showMeWhere(state, view);
     case "u-unsure":
-      return handleUnsure(recordAnswer(state, option.label, { ...meta, certainty: "uncertain" }), step);
+      return handleUnsure(recordAnswer(state, option.id, option.label, { ...meta, certainty: "uncertain" }), step);
   }
 
-  let s = recordAnswer(state, option.label, meta);
+  let s = recordAnswer(state, option.id, option.label, meta);
 
   if (step.kind === "confirm") {
     if (option.id === "confirm:yes") return beginEquipmentFlow(s, step.equipmentId, []);
@@ -329,7 +390,7 @@ function applyChoice(state: ConversationState, option: StepOption, meta: AnswerM
     return beginEquipmentFlow(s, option.id.slice("equip:".length), []);
   }
 
-  if (step.kind === "node" && option.id.startsWith("opt:")) {
+  if ((step.kind === "node" || step.kind === "check") && option.id.startsWith("opt:")) {
     const node = nodesById.get(step.nodeId);
     const flowOption = node?.options.find((o) => `opt:${o.id}` === option.id);
     if (flowOption) {
@@ -354,23 +415,24 @@ function showMeWhere(state: ConversationState, view: StepView): EngineResult {
     };
   }
   return {
-    state: say(state, "I've opened the Studio Explorer. Select the item you mean, then choose \u201cUse in troubleshooter\u201d."),
+    state: say(state, "I've opened the Studio Explorer. Select the item you mean, then choose “Use in troubleshooter”."),
     commands: [{ type: "open_studio_explorer" }],
   };
 }
 
 function handleUnsure(state: ConversationState, step: Step): EngineResult {
   switch (step.kind) {
-    case "node": {
+    case "node":
+    case "check": {
       const node = nodesById.get(step.nodeId);
-      if (node?.unsureNext) return goToNode(say(state, "That's fine \u2014 let's try something else."), node.unsureNext);
+      if (node?.unsureNext) return goToNode(say(state, "That's fine — let's try something else."), node.unsureNext);
       return goSupport(state);
     }
     case "confirm":
     case "start":
       return { state: enterStep(say(state, "No problem."), { kind: "choose", equipmentIds: allEquipmentIds(), reason: "other" }), commands: [] };
     case "choose":
-      return { state: say(state, "That's okay. Choose \u201cShow me where\u201d to look around the studio, or ask for technical support."), commands: [] };
+      return { state: say(state, "That's okay. Choose “Show me where” to look around the studio, or ask for technical support."), commands: [] };
     case "support":
       return { state, commands: [] };
   }
@@ -385,7 +447,10 @@ function handleExplorerSelection(state: ConversationState, equipmentId: string):
   }
   const record = getEquipmentById(equipmentId)!;
   let s = addMessage(state, { role: "user", text: `I've selected the ${record.shortName} in the Studio Explorer.` });
-  s = { ...s, answers: [...s.answers, { question: "Equipment selected in Studio Explorer", answer: record.name, ...BUTTON }] };
+  s = {
+    ...s,
+    answers: [...s.answers, { questionId: "studio-explorer", optionId: `equip:${equipmentId}`, question: "Equipment selected in Studio Explorer", answer: record.name, ...BUTTON }],
+  };
   return beginEquipmentFlow(s, equipmentId, []);
 }
 
@@ -393,8 +458,31 @@ function handleTopic(state: ConversationState, topicId: string): EngineResult {
   const topic = troubleshootingTopics.find((t) => t.id === topicId);
   if (!topic) return { state: addMessage(state, { role: "notice", text: "That topic isn't available." }), commands: [] };
   let s = addMessage(state, { role: "user", text: topic.label });
-  s = { ...s, answers: [...s.answers, { question: "Common problem chosen", answer: topic.label, ...BUTTON }] };
+  s = { ...s, answers: [...s.answers, { questionId: "topic", optionId: `topic:${topic.id}`, question: "Common problem chosen", answer: topic.label, ...BUTTON }] };
   return describeNewProblem(s, understand(topic.utterance), { selectedEquipmentId: null });
+}
+
+/* ------------------------------------------------------------------ */
+/* Safety (RT-002D): independent of routing                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Attach the broadcast-safety reading of this message to the session. Runs
+ * before any routing and never looks at the question or answer options.
+ * Urgency only ever increases; historical, hypothetical and denied readings
+ * are kept for technical support but never raise or lower urgency.
+ */
+function applySafety(state: ConversationState, text: string, broadcast: BroadcastAssessment, u: Understanding): ConversationState {
+  let s = state;
+  if (broadcast.status !== "none") s = { ...s, broadcastReports: [...s.broadcastReports, { status: broadcast.status, text }] };
+  if (broadcast.status === "current-confirmed") s = { ...s, urgent: true, confirmedOffAir: true };
+  else if (broadcast.status === "current-possible") s = { ...s, urgent: true, possibleSilence: true };
+  // Silence described without mentioning the broadcast ("nothing is playing") is possible silence.
+  if (u.signals.includes("silence") && !isCurrentConcern(broadcast.status) && broadcast.status !== "historical" && broadcast.status !== "hypothetical" && broadcast.status !== "denied") {
+    s = { ...s, possibleSilence: true };
+  }
+  if (u.signals.includes("on-air-unknown")) s = { ...s, possibleSilence: true };
+  return s;
 }
 
 /* ------------------------------------------------------------------ */
@@ -409,35 +497,32 @@ function handleText(state: ConversationState, rawText: string, context: EngineCo
 
   const view = describeStep(state);
   const u = understand(text);
+  const broadcast = u.broadcast;
 
-  // The user's words are always kept, verbatim, before anything else happens.
+  // 1. The presenter's words are kept verbatim, before anything else happens.
   let s = addMessage(state, { role: "user", text });
   s = recordObservation(s, text, view.kind === "question" ? view.prompt : null);
 
-  // 1. Safety first: classify urgency and attach it to the session BEFORE any
-  //    routing, so it survives whatever else the message asks for.
-  //    Confirmed = stated as fact. Possible (asked, hedged, uncertain or partly
-  //    corrected) is escalated just the same, but recorded as unconfirmed.
-  if (u.offAir === "confirmed") s = { ...s, urgent: true, confirmedOffAir: true };
-  else if (u.offAir === "possible") s = { ...s, urgent: true, possibleSilence: true };
-  else if (u.signals.includes("silence") || u.signals.includes("on-air-unknown")) s = { ...s, possibleSilence: true };
+  // 2. Safety, classified independently and attached BEFORE any routing, so it
+  //    survives whatever else the message asks for.
+  s = applySafety(s, text, broadcast, u);
 
-  // 2. Off-air reports go to the urgent state, even when the message also asks
-  //    for a person or about a procedure (both are answered there).
-  if (u.offAir) {
+  // 3. A current broadcast concern goes to the urgent state. A request for a
+  //    person or a procedure question in the same message is answered there;
+  //    neither erases the concern.
+  if (isCurrentConcern(broadcast.status)) {
     const preface = [
-      u.offAir === "possible" ? POSSIBLE_OFF_AIR_NOTE : null,
+      broadcast.status === "current-possible" ? POSSIBLE_OFF_AIR_NOTE : null,
       u.procedureQuestion ? PROCEDURE_REPLY : null,
       u.helpRequest ? "I've marked this as urgent for technical support." : null,
     ].filter(Boolean).join(" ");
     return goUrgent(preface ? say(s, preface) : s);
   }
 
-  // 3. A request for a person wins over continuing the diagnosis.
+  // 4. A request for a person wins over continuing the diagnosis.
   if (u.helpRequest) return goSupport(s);
 
-  // 4. Questions such as "Should I restart the computer?" get a safe answer; nothing
-  //    is reset. If the message also suggests silence, check the broadcast next.
+  // 5. "Should I restart the computer?" gets the safe answer; nothing is reset.
   if (u.procedureQuestion) {
     const node = state.step.kind === "node" ? nodesById.get(state.step.nodeId) : undefined;
     if (s.possibleSilence && !node?.broadcastCheck && (u.signals.includes("silence") || u.signals.includes("on-air-unknown"))) {
@@ -446,159 +531,312 @@ function handleText(state: ConversationState, rawText: string, context: EngineCo
     return reask(s, PROCEDURE_REPLY);
   }
 
-  // 4b. "What if we go off air?" is not a report: answer it and record nothing.
-  if (u.hypotheticalOffAir && !u.assertive) return reask(s, HYPOTHETICAL_OFF_AIR_REPLY);
+  // 6. Past, hypothetical and denied interruptions are noted, never recorded as current.
+  if (broadcast.status === "hypothetical" && !u.assertive) return reask(s, HYPOTHETICAL_OFF_AIR_REPLY);
+  if (broadcast.status === "historical") s = say(s, HISTORICAL_OFF_AIR_NOTE);
+  if (broadcast.status === "denied") s = say(s, DENIED_OFF_AIR_NOTE);
 
-  // 4. Typed "start again" never clears the conversation by itself.
+  // 7. Typed "start again" never clears the conversation by itself.
   if (RESTART_WORDS.includes(u.normalised.replace(/[.!?]+$/, ""))) {
     return {
-      state: say(s, "To start afresh, use the \u201cEnd session\u201d button at the top of the conversation. Your answers so far are still here."),
+      state: say(s, "To start afresh, use the “End session” button at the top of the conversation. Your answers so far are still here."),
       commands: [],
     };
   }
 
-  // 5. The user typed an option's label exactly.
+  // 8. The presenter typed an answer's exact label: that is an explicit choice.
   const lower = text.toLowerCase().replace(/[.!?]+$/, "");
   const byLabel = view.options.find((o) => o.kind !== "topic" && o.kind !== "restart" && o.label.toLowerCase() === lower);
   if (byLabel) return applyChoice(s, byLabel, { source: "typed", certainty: "confirmed", typedText: text });
 
   if (view.kind === "question" && SHOW_ME_PHRASES.some((p) => hasPhrase(u.normalised, p))) return showMeWhere(s, view);
 
-  // 6. Interpret as a reply to the current question.
+  // 9. Interpret as a reply to the current question, by that question's schema.
   const step = state.step;
-  if (step.kind === "node" && view.kind === "question") {
+  if (step.kind === "node") {
     const node = nodesById.get(step.nodeId);
-    if (node) return replyToNode(s, node, u);
+    if (node && node.kind === "question") return replyToNode(s, node, u);
   }
+  if (step.kind === "check") return replyToCheck(s, step, u);
   if (step.kind === "confirm") return replyToConfirm(s, step.equipmentId, u);
   if (step.kind === "choose") {
-    if (u.stance === "uncertain") return applyChoice(s, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
+    if (u.bare === "uncertain") return applyChoice(s, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
     const candidates = getAllEquipment().filter((record) => step.equipmentIds.includes(record.id));
     const match = matchEquipment(text, candidates);
     const [only] = match.equipmentIds;
-    if (match.equipmentIds.length === 1 && only) {
-      s = recordAnswer(s, getEquipmentById(only)!.name, typedMeta(u));
-      return beginEquipmentFlow(s, only, []);
-    }
+    // Equipment identity is confirmed with a question, never assumed from typed words.
+    if (match.equipmentIds.length === 1 && only) return { state: enterStep(s, { kind: "confirm", equipmentId: only }), commands: [] };
   }
 
-  // 7. Otherwise this is a (new) description of a problem.
+  // 10. Otherwise this is a (new) description of a problem.
   return describeNewProblem(s, u, context);
+}
+
+/** Confirming an interpretation of hedged words ("I think so") keeps it marked as not certain. */
+function confirmedMeta(basedOn: string): AnswerMeta {
+  return { source: "confirmed-interpretation", certainty: understand(basedOn).hedged ? "uncertain" : "confirmed", typedText: basedOn };
 }
 
 function typedMeta(u: Understanding, certainty?: AnsweredQuestion["certainty"]): AnswerMeta {
   return { source: "typed", certainty: certainty ?? (u.hedged ? "uncertain" : "confirmed"), typedText: u.text };
 }
 
-/**
- * How an option relates to the reply. An option is only usable when it is
- * consistent with BOTH the user's yes/no stance and their observations.
- */
-interface OptionFit {
-  option: FlowOption;
-  score: number;
-  /** The stance agrees with this option's meaning of "yes"/"no". */
-  stanceMatch: boolean;
-  /** The user said something this option contradicts. */
-  contradicted: boolean;
-  /** The user's statement uses one of this option's own phrases ("they move"). */
-  claimed: boolean;
+/* ------------------------------------------------------------------ */
+/* Question-specific answer schemas (RT-002D)                          */
+/* ------------------------------------------------------------------ */
+
+/** What choosing an option asserts, if anything, in claim terms. */
+function optionClaim(option: FlowOption): { subject: ClaimSubject; value: boolean } | null {
+  if (option.audio) return { subject: "sound", value: option.audio === "present" };
+  return option.asserts ?? null;
 }
 
-function fitOption(option: FlowOption, u: Understanding): OptionFit {
-  let score = 0;
-  let contradicted = false;
-  let stanceMatch = false;
-  if (option.answer && (u.stance === "affirm" || u.stance === "negate")) {
-    stanceMatch = (u.stance === "affirm") === (option.answer === "yes");
-    if (stanceMatch) score += 2;
-    else contradicted = true;
+/** The subjects a question node is about (from its options' declared claims). */
+function nodeSubjects(node: FlowNode): ClaimSubject[] {
+  return [...new Set(node.options.map(optionClaim).filter((c): c is NonNullable<typeof c> => c !== null).map((c) => c.subject))];
+}
+
+/**
+ * Safety-relevant questions (broadcast, playback, sound, levels): a typed
+ * reply is never committed without explicit confirmation unless it is a bare
+ * yes/no or an exact answer label.
+ */
+function isSafetyRelevant(node: FlowNode): boolean {
+  return Boolean(node.broadcastCheck) || nodeSubjects(node).some((s) => s === "sound" || s === "movement");
+}
+
+const IDENTITY_CORRECTION = [
+  "not the one i meant",
+  "not what i meant",
+  "that is not the one",
+  "not that one",
+  "wrong one",
+  "the wrong",
+  "different one",
+  "a different",
+  "i meant the",
+  "i mean the",
+  "i was talking about",
+  "i did not mean",
+  "not the right one",
+  "not the right thing",
+  "not the thing i meant",
+  "not the equipment",
+];
+
+/**
+ * The presenter is correcting WHICH equipment is being discussed, not
+ * answering the question ("No, that's not the one I meant", "it's not the
+ * green button"). Returns the equipment they named instead, if any.
+ */
+function identityCorrection(u: Understanding, currentEquipmentId: string | null): { corrects: boolean; named: string | null; deniedCurrent: boolean } {
+  const n = u.normalised;
+  const named = interpret(u.text);
+  const namedId = named.kind === "equipment" ? named.equipmentId : null;
+  const current = getEquipmentById(currentEquipmentId);
+  const currentNames = current ? [current.name, current.shortName, ...(current.aliases ?? [])].map((x) => normaliseReply(x)) : [];
+  const deniedCurrent = currentNames.some((name) => name && (hasPhrase(n, `not the ${name}`) || hasPhrase(n, `not a ${name}`) || hasPhrase(n, `not my ${name}`) || hasPhrase(n, `is not ${name}`)));
+  const phrase = IDENTITY_CORRECTION.some((p) => hasPhrase(n, p));
+  const namesOther = namedId !== null && namedId !== currentEquipmentId && !deniedCurrent && /\b(i meant|i mean|it is the|it is a|it is my|talking about)\b/.test(n);
+  return { corrects: phrase || deniedCurrent || namesOther, named: namedId !== currentEquipmentId && !deniedCurrent ? namedId : null, deniedCurrent };
+}
+
+interface Proposal {
+  option: FlowOption;
+  /** The reply can be committed without a confirmation step. */
+  firm: boolean;
+}
+
+type Interpretation =
+  | { kind: "proposal"; proposal: Proposal }
+  | { kind: "conflict"; message: string }
+  | { kind: "other-subject"; subjects: ClaimSubject[] }
+  | { kind: "none" };
+
+const SUBJECT_WORDS: Record<ClaimSubject, [string, string]> = {
+  sound: ["there's sound", "there's no sound"],
+  movement: ["they are moving", "they are not moving"],
+  "worked-earlier": ["it was working earlier", "it has not worked"],
+  found: ["you have found it", "you can't find it"],
+};
+
+/** Read a typed reply against ONE question's answer schema. Never records anything. */
+function interpretForNode(node: FlowNode, u: Understanding): Interpretation {
+  const subjects = nodeSubjects(node);
+  const reading = extractClaims(u.text);
+  const relevant = subjects.map((subject) => ({ subject, value: claimValue(reading, subject) })).filter((r) => r.value !== null);
+  const conflicted = subjects.filter((subject) => reading.conflicts.includes(subject));
+  if (conflicted.length > 0) return { kind: "conflict", message: "Your message seems to say both things, so I haven't recorded an answer." };
+
+  const stance = u.stance === "affirm" || u.stance === "negate" ? u.stance : null;
+  if (u.stance === "conflict") return { kind: "conflict", message: "I'm not sure whether you meant yes or no, so I haven't recorded an answer." };
+
+  // 1. A claim about what this question asks.
+  if (relevant.length > 0) {
+    const matching = node.options.filter((o) => {
+      const claim = optionClaim(o);
+      return claim !== null && relevant.some((r) => r.subject === claim.subject && r.value === claim.value);
+    });
+    if (matching.length !== 1) return { kind: "none" };
+    const option = matching[0]!;
+    if (stance && option.answer && (stance === "affirm") !== (option.answer === "yes")) {
+      const r = relevant[0]!;
+      const said = stance === "affirm" ? "yes" : "no";
+      return { kind: "conflict", message: `You said ${said}, but also that ${SUBJECT_WORDS[r.subject][r.value ? 0 : 1]}, so I haven't recorded an answer.` };
+    }
+    const firm = reading.claims.every((c) => c.firm) && !u.hedged;
+    return { kind: "proposal", proposal: { option, firm } };
   }
-  if (option.audio && u.audio) {
-    if (option.audio === u.audio) score += 3;
-    else contradicted = true;
+
+  // 2. Claims only about something else don't answer this question. A yes/no
+  //    that AGREES with that other claim ("No, there's no sound" to "do the
+  //    meters move?") is about the other subject too. One that CONTRASTS with it
+  //    ("Yes, but there's no sound") answers this question — tentatively.
+  const otherClaims = reading.claims.filter((c) => !subjects.includes(c.subject));
+  if (otherClaims.length > 0) {
+    const others = [...new Set(otherClaims.map((c) => c.subject))];
+    const contrasting = stance !== null && otherClaims.every((c) => c.value !== (stance === "affirm"));
+    if (!contrasting) return { kind: "other-subject", subjects: others };
+    const byAnswer = node.options.filter((o) => o.answer === (stance === "affirm" ? "yes" : "no"));
+    if (byAnswer.length === 1) return { kind: "proposal", proposal: { option: byAnswer[0]!, firm: false } };
+    return { kind: "other-subject", subjects: others };
   }
-  // Only statements count: "Do they move?" doesn't claim that they move.
-  const claimed = Boolean(u.assertive) && Boolean(option.match?.some((phrase) => hasPhrase(u.assertive, normaliseReply(phrase), true)));
-  if (claimed) score += 2;
-  return { option, score, stanceMatch, contradicted, claimed };
+
+  // 3. This option's own phrases, in statements only.
+  const claimed = u.assertive ? node.options.filter((o) => o.match?.some((phrase) => hasPhrase(u.assertive, normaliseReply(phrase), true))) : [];
+  if (claimed.length === 1) {
+    const option = claimed[0]!;
+    if (stance && option.answer && (stance === "affirm") !== (option.answer === "yes")) {
+      return { kind: "conflict", message: `You said ${stance === "affirm" ? "yes" : "no"}, but the rest of your message seems to say the opposite, so I haven't recorded an answer.` };
+    }
+    return { kind: "proposal", proposal: { option, firm: !u.hedged && !u.negatedPredicate } };
+  }
+  if (claimed.length > 1) return { kind: "none" };
+
+  // 4. A yes/no with more words: a tentative reading only.
+  if (stance) {
+    if (stance === "affirm" && u.negatedPredicate) {
+      return { kind: "conflict", message: "You said yes, but the rest of your message seems to say the opposite, so I haven't recorded an answer." };
+    }
+    const byAnswer = node.options.filter((o) => o.answer === (stance === "affirm" ? "yes" : "no"));
+    if (byAnswer.length === 1) return { kind: "proposal", proposal: { option: byAnswer[0]!, firm: false } };
+  }
+  return { kind: "none" };
+}
+
+function proposeCheck(state: ConversationState, node: FlowNode, option: FlowOption, basedOn: string): EngineResult {
+  let s = state;
+  // Safety never waits for the confirmation click: if this reading points to
+  // possible silence, escalate now as POSSIBLE (unconfirmed). Only the
+  // recorded answer waits for the presenter.
+  if (nodesById.get(option.next)?.urgent) {
+    s = say({ ...s, urgent: true, possibleSilence: true }, POSSIBLE_SILENCE_PENDING_NOTE);
+  }
+  return { state: enterStep(s, { kind: "check", nodeId: node.id, optionId: option.id, basedOn }), commands: [] };
+}
+
+function commitNodeOption(state: ConversationState, node: FlowNode, option: FlowOption, meta: AnswerMeta): EngineResult {
+  const view = describeStep({ ...state, step: { kind: "node", nodeId: node.id } });
+  const stepOption = view.options.find((o) => o.id === `opt:${option.id}`)!;
+  return applyChoice({ ...state, step: { kind: "node", nodeId: node.id } }, stepOption, meta);
 }
 
 function replyToNode(state: ConversationState, node: FlowNode, u: Understanding): EngineResult {
   // Not knowing whether the station is on air is itself a reason to check for silence.
   if (u.signals.includes("on-air-unknown") && !node.broadcastCheck) {
-    const s = recordAnswer(state, "Unsure whether the station is on air", typedMeta(u, "uncertain"));
-    return goToNode(say(s, "Let's check that first."), ON_AIR_CHECK_NODE);
+    return goToNode(say(state, "Let's check that first."), ON_AIR_CHECK_NODE);
   }
-  // Uncertain or asked-about silence is checked before anything is recorded.
-  if (u.signals.includes("silence") && !u.audio && !node.broadcastCheck && (u.stance === "uncertain" || !u.assertive)) {
+
+  // A bare "yes", "no" or "not sure" answers exactly this question.
+  if (u.bare === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
+  if (u.bare === "affirm" || u.bare === "negate") {
+    const byAnswer = node.options.filter((o) => o.answer === (u.bare === "affirm" ? "yes" : "no"));
+    if (byAnswer.length === 1) {
+      // A bare yes/no answers exactly the question on screen — including the
+      // broadcast check, so a clear "yes" there escalates without delay.
+      return commitNodeOption(state, node, byAnswer[0]!, typedMeta(u));
+    }
+  }
+
+  // A correction about WHICH equipment is never an answer to this question.
+  const identity = identityCorrection(u, state.equipmentId);
+  if (identity.corrects) {
+    const s = say(state, "It sounds like you're correcting which equipment we're talking about, not answering this question, so I haven't recorded an answer.");
+    if (identity.named) return { state: enterStep(s, { kind: "confirm", equipmentId: identity.named }), commands: [] };
+    return { state: enterStep(s, { kind: "choose", equipmentIds: allEquipmentIds(), reason: "other" }), commands: [] };
+  }
+
+  // Uncertain or asked-about silence is checked before anything else.
+  if (u.signals.includes("silence") && !node.broadcastCheck && !nodeSubjects(node).includes("sound")) {
     return goToNode(say(state, "That sounds like there may be silence. Let me check that first."), ON_AIR_CHECK_NODE);
   }
-  if (u.stance === "uncertain" && !u.audio) return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
+  if (u.stance === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
   // A question or hypothetical on its own answers nothing.
-  if (!u.assertive && u.stance === "none" && !u.audio) return reask(state, u.isQuestion ? QUESTION_ONLY_REPLY : "Thanks \u2014 I've noted that. To carry on, please choose one of the answers below.");
+  if (!u.assertive && u.stance === "none") return reask(state, u.isQuestion ? QUESTION_ONLY_REPLY : NOTED_REPLY);
 
-  const fits = node.options.map((option) => fitOption(option, u));
-  // RT-QA-002B: a leading "yes"/"no" never wins over the rest of the sentence.
-  // "Yes, they don't move" / "No, they're moving" / "Yes, it wasn't working".
-  const prefixContradicted =
-    fits.some((f) => f.claimed && f.contradicted) || (u.stance === "affirm" && u.negatedPredicate && !u.audio && node.options.some((o) => o.answer));
-  if (prefixContradicted) {
-    const said = u.stance === "affirm" ? "yes" : "no";
-    return reask(state, `You said ${said}, but the rest of your message seems to say the opposite, so I won't record an answer yet.`);
+  const reading = interpretForNode(node, u);
+  switch (reading.kind) {
+    case "proposal": {
+      const { option, firm } = reading.proposal;
+      if (firm && !isSafetyRelevant(node)) return commitNodeOption(state, node, option, typedMeta(u));
+      return proposeCheck(state, node, option, u.text);
+    }
+    case "conflict":
+      return reask(state, reading.message);
+    case "other-subject": {
+      if (reading.subjects.includes("sound") && u.signals.includes("no-sound") && !HEARING_NODES.has(node.id)) {
+        return goToNode(say(state, "Let's find out where the sound is missing."), HEARING_NODE);
+      }
+      return reask(state, "Thanks — I've noted that for technical support. It doesn't answer this question, so I haven't recorded an answer.");
+    }
+    case "none":
+      if (u.signals.includes("no-sound") && !HEARING_NODES.has(node.id)) {
+        return goToNode(say(state, "Let's find out where the sound is missing."), HEARING_NODE);
+      }
+      return reask(state, NOTED_REPLY);
   }
-  const usable = fits.filter((f) => !f.contradicted && f.score >= 2).sort((a, b) => b.score - a.score);
-  const [best, second] = usable;
+}
 
-  if (best && (!second || second.score < best.score) && u.stance !== "conflict" && !u.audioConflict) {
-    const option = describeStep(state).options.find((o) => o.id === `opt:${best.option.id}`)!;
-    return applyChoice(state, option, typedMeta(u));
+/** A reply while a tentative interpretation is waiting for confirmation. */
+function replyToCheck(state: ConversationState, step: Extract<Step, { kind: "check" }>, u: Understanding): EngineResult {
+  const node = nodesById.get(step.nodeId);
+  const option = node?.options.find((o) => o.id === step.optionId);
+  if (!node || !option) return goSupport(state);
+  if (u.bare === "affirm") {
+    return applyChoice(state, { id: `opt:${option.id}`, label: option.label, kind: "answer" }, confirmedMeta(step.basedOn));
   }
-
-  // The yes/no and the observation point different ways — never record either.
-  const stanceVsObservation = fits.some((f) => f.stanceMatch && f.contradicted);
-  if (stanceVsObservation || u.stance === "conflict" || u.audioConflict) {
-    const said = u.stance === "affirm" ? "yes" : u.stance === "negate" ? "no" : "both yes and no";
-    const observed = u.audio === "absent" ? "that there's no sound" : u.audio === "present" ? "that there is sound" : "something different";
-    const preface =
-      u.stance === "conflict" || u.audioConflict
-        ? "I'm not sure which you meant, so I won't record an answer yet."
-        : `You said ${said}, but also ${observed}, so I won't record an answer yet.`;
-    if (u.audio === "absent" && !node.broadcastCheck) return goToNode(say(state, `${preface} Let me check something first.`), ON_AIR_CHECK_NODE);
-    return reask(state, preface);
+  if (u.bare === "negate") {
+    return { state: enterStep(say(state, "Okay, I haven't recorded that. Which of these is right?"), { kind: "node", nodeId: node.id }), commands: [] };
   }
-
-  if (best && second) return reask(state, "Sorry, I couldn't tell which answer you meant.");
-
-  // No answer fits. Possible silence still gets priority.
-  if (u.signals.includes("silence") && !node.broadcastCheck) {
-    return goToNode(say(state, "That sounds like there may be silence. Let me check that first."), ON_AIR_CHECK_NODE);
-  }
-  if (u.signals.includes("no-sound") && !HEARING_NODES.has(node.id)) {
-    return goToNode(say(state, "Let's find out where the sound is missing."), HEARING_NODE);
-  }
-  // Keep the user's place; their words are already saved for technical support.
-  return reask(state, "Thanks \u2014 I've noted that for technical support. To carry on, please choose one of the answers below.");
+  if (u.bare === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
+  // Anything else is a new reply to the original question.
+  return replyToNode({ ...state, step: { kind: "node", nodeId: node.id } }, node, u);
 }
 
 function replyToConfirm(state: ConversationState, equipmentId: string, u: Understanding): EngineResult {
-  if (u.stance === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
-  if (u.stance === "conflict") return reask(state, "I'm not sure whether you meant yes or no.");
+  if (u.bare === "uncertain" || u.stance === "uncertain") return applyChoice(state, UNIVERSAL_OPTIONS[0]!, typedMeta(u, "uncertain"));
+  if (u.stance === "conflict") return reask(state, "I'm not sure whether you meant yes or no, so I haven't recorded an answer.");
   const options = describeStep(state).options;
   if (!u.assertive && u.stance === "none") return reask(state, QUESTION_ONLY_REPLY);
-  const other = interpret(u.text);
-  if (u.stance === "affirm" && other.kind === "equipment" && other.equipmentId !== equipmentId) {
-    // "Yes, it's the guest mic" while confirming another item: never assume either.
-    const named = getEquipmentById(other.equipmentId);
+  const record = getEquipmentById(equipmentId);
+  const identity = identityCorrection(u, equipmentId);
+
+  // "Yes, it's not the green button": never assume either way.
+  if (u.stance === "affirm" && identity.deniedCurrent) {
+    return reask(state, `You said yes, but also that it isn't the ${record?.shortName ?? "equipment"}, so I haven't recorded an answer.`);
+  }
+  // "Yes, it's the guest mic" while confirming another item: ask which.
+  if (u.stance === "affirm" && identity.named) {
+    const named = getEquipmentById(identity.named);
     const s = say(state, `You said yes, but also mentioned the ${named?.shortName ?? "other equipment"}, so I won't assume which you mean.`);
-    return { state: enterStep(s, { kind: "choose", equipmentIds: [equipmentId, other.equipmentId], reason: "ambiguous" }), commands: [] };
+    return { state: enterStep(s, { kind: "choose", equipmentIds: [equipmentId, identity.named], reason: "ambiguous" }), commands: [] };
   }
-  if (u.stance !== "affirm" && other.kind === "equipment" && other.equipmentId !== equipmentId) {
-    // "No, it's the guest mic" — check the newly named item instead.
-    const s = recordAnswer(state, "No, something else", typedMeta(u));
-    return { state: enterStep(s, { kind: "confirm", equipmentId: other.equipmentId }), commands: [] };
+  // "No, it's the guest mic": ask about the newly named item (nothing recorded).
+  if (identity.named && u.stance !== "affirm") {
+    return { state: enterStep(state, { kind: "confirm", equipmentId: identity.named }), commands: [] };
   }
-  if (u.stance === "negate") return applyChoice(state, options.find((o) => o.id === "confirm:no")!, typedMeta(u));
+  // This question IS about identity, so "not the one I meant" answers it: no.
+  if (u.stance === "negate" || identity.corrects) return applyChoice(state, options.find((o) => o.id === "confirm:no")!, typedMeta(u));
   if (u.stance === "affirm") return applyChoice(state, options.find((o) => o.id === "confirm:yes")!, typedMeta(u));
   if (u.signals.includes("silence")) return goToNode(say(state, "Let me check something first."), ON_AIR_CHECK_NODE);
   return reask(state, "Thanks, I've noted that. Just to check which equipment you mean:");
@@ -611,7 +849,7 @@ function describeNewProblem(state: ConversationState, u: Understanding, context:
   });
 
   // Possible silence is checked before anything else.
-  if (u.signals.includes("silence") || u.signals.includes("on-air-unknown")) {
+  if ((u.signals.includes("silence") && u.broadcast.status !== "historical" && u.broadcast.status !== "denied") || u.signals.includes("on-air-unknown")) {
     return goToNode({ ...state, equipmentId: state.equipmentId }, ON_AIR_CHECK_NODE);
   }
 
@@ -648,6 +886,11 @@ export function buildSupportSummary(state: ConversationState): string {
   else if (state.urgent) lines.push("URGENT (precaution): possible silence on air \u2014 not confirmed by the presenter");
   else if (state.possibleSilence) lines.push("Possible silence reported (not confirmed) \u2014 check whether the station is on air");
   lines.push(`Equipment: ${record ? record.name : "not identified yet"}`);
+  // Mentioned but never treated as current: kept so support has the full picture.
+  for (const report of state.broadcastReports) {
+    if (report.status === "historical") lines.push(`Earlier interruption mentioned (presenter says it is over): \u201c${report.text}\u201d`);
+    if (report.status === "hypothetical") lines.push(`Asked hypothetically about going off air (not a report): \u201c${report.text}\u201d`);
+  }
 
   if (state.observations.length > 0) {
     lines.push("", "In the presenter's own words:");
@@ -657,7 +900,11 @@ export function buildSupportSummary(state: ConversationState): string {
   if (state.answers.length > 0) {
     lines.push("", "Answers to questions:");
     for (const a of state.answers) {
-      const notes = [a.source === "typed" ? "typed reply" : null, a.certainty === "uncertain" ? "not certain" : null].filter(Boolean);
+      const notes = [
+        a.source === "typed" ? "typed reply" : null,
+        a.source === "confirmed-interpretation" ? `confirmed by the presenter from their words \u201c${a.typedText ?? ""}\u201d` : null,
+        a.certainty === "uncertain" ? "not certain" : null,
+      ].filter(Boolean);
       lines.push(`- ${a.question} \u2192 ${a.answer}${notes.length ? ` (${notes.join(", ")})` : ""}`);
     }
   }

@@ -42,10 +42,17 @@ describe("1. question-aware answers", () => {
     ["hear-on-air", "No, there's sound, but the mic is missing", "No, there is sound but something is missing"],
     ["mic-headphones", "Nope, I can't hear anything", "No, I can't hear anything"],
   ])("on %s: %j → %s", (nodeId, text, expected) => {
+    // RT-002D: these are safety-relevant questions, so the typed reply is
+    // interpreted and PROPOSED, never recorded until the presenter confirms it.
     const s = type(onNode(nodeId), text);
-    const recorded = answersTo(s, prompt(nodeId));
+    expect(answersTo(s, prompt(nodeId))).toEqual([]);
+    expect(s.step).toMatchObject({ kind: "check", nodeId });
+    const proposed = describeStep(s).options[0]!;
+    expect(proposed.label).toBe(expected);
+    const confirmed = press(s, proposed.id);
+    const recorded = answersTo(confirmed, prompt(nodeId));
     expect(recorded.map((a) => a.answer)).toEqual([expected]);
-    expect(recorded[0]).toMatchObject({ source: "typed", typedText: text });
+    expect(recorded[0]).toMatchObject({ source: "confirmed-interpretation", typedText: text });
   });
 
   it.each([

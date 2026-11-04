@@ -50,15 +50,22 @@ describe("A1 — understanding negation, uncertainty and observations", () => {
   });
 
   it("'No, it is silent' is never recorded as 'still playing' and escalates", () => {
+    // RT-002D: escalation is immediate (as possible silence); the answer itself is confirmed first.
     const s = type(atStillPlaying(), "No, it is silent.");
-    expect(nodeId(s)).toBe("outcome-urgent");
     expect(s.urgent).toBe(true);
-    expect(s.answers.at(-1)).toMatchObject({ answer: "No — there's silence", source: "typed", typedText: "No, it is silent." });
-    expect(answeredStillPlaying(s).map((a) => a.answer)).toEqual(["No — there's silence"]);
+    expect(s.confirmedOffAir).toBe(false);
+    expect(answeredStillPlaying(s)).toEqual([]);
+    expect(describeStep(s).options[0]?.label).toBe("No — there's silence");
+    const confirmed = press(s, "No — there's silence");
+    expect(nodeId(confirmed)).toBe("outcome-urgent");
+    expect(confirmed.answers.at(-1)).toMatchObject({ answer: "No — there's silence", source: "confirmed-interpretation", typedText: "No, it is silent." });
+    expect(answeredStillPlaying(confirmed).map((a) => a.answer)).toEqual(["No — there's silence"]);
   });
 
   it("'No, nothing is playing' escalates", () => {
-    expect(nodeId(type(atStillPlaying(), "No, nothing is playing."))).toBe("outcome-urgent");
+    const s = type(atStillPlaying(), "No, nothing is playing.");
+    expect(s.urgent).toBe(true);
+    expect(nodeId(press(s, "No — there's silence"))).toBe("outcome-urgent");
   });
 
   it("'Yes, but there's no sound' asks for clarification instead of recording yes", () => {
@@ -73,7 +80,10 @@ describe("A1 — understanding negation, uncertainty and observations", () => {
     s = press(s, "Presenter microphone");
     s = press(s, "Other people can't hear it");
     s = type(s, "Yes, but there's no sound at all");
-    expect(s.answers.at(-1)).toMatchObject({ answer: "Yes, they move", source: "typed", typedText: "Yes, but there's no sound at all" });
+    // RT-002D: proposed by the yes (the sound remark is a separate observation), then confirmed.
+    expect(describeStep(s).options[0]?.label).toBe("Yes, they move");
+    s = press(s, "Yes, they move");
+    expect(s.answers.at(-1)).toMatchObject({ answer: "Yes, they move", source: "confirmed-interpretation", typedText: "Yes, but there's no sound at all" });
     expect(buildSupportSummary(s)).toContain("\u201cYes, but there's no sound at all\u201d");
   });
 
@@ -96,6 +106,8 @@ describe("A1 — understanding negation, uncertainty and observations", () => {
     s = press(s, "Yes, that's it");
     s = press(s, "Nothing changed");
     s = type(s, "Yes I think so");
+    // RT-002D: a hedged reply is proposed, and stays "not certain" once confirmed.
+    s = press(s, "Yes, it's still playing");
     expect(s.answers.at(-1)).toMatchObject({ answer: "Yes, it's still playing", certainty: "uncertain" });
   });
 

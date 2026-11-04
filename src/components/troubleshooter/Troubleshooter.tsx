@@ -21,7 +21,7 @@ const universalIcons: Record<string, typeof CircleHelp> = {
 };
 
 export function Troubleshooter() {
-  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired } = useTroubleshooter();
+  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired, restoreFailed, dismissRestoreFailed } = useTroubleshooter();
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
@@ -163,10 +163,18 @@ export function Troubleshooter() {
         {conversation.urgent ? (
           <div role="status" data-testid="urgent-banner" className="flex gap-2.5 border-b border-alert-400/40 bg-alert-900/50 px-4 py-2.5 text-[13px] sm:px-5">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-alert-300" />
-            <p className="text-ink-50">
-              <span className="font-semibold text-alert-300">Urgent: silence on air reported.</span> Contact technical support now.
-              Their contact details haven&apos;t been configured in Radio Technics yet.
-            </p>
+            {/* RT-002D: confirmed and possible interruptions are worded differently. */}
+            {conversation.confirmedOffAir ? (
+              <p className="text-ink-50">
+                <span className="font-semibold text-alert-300">Urgent: a broadcast interruption has been reported.</span> Contact technical
+                support now. Their contact details haven&apos;t been configured in Radio Technics yet.
+              </p>
+            ) : (
+              <p className="text-ink-50">
+                <span className="font-semibold text-alert-300">Possible broadcast interruption — not yet confirmed.</span> It&apos;s being
+                treated as urgent: contact technical support now. Their contact details haven&apos;t been configured in Radio Technics yet.
+              </p>
+            )}
           </div>
         ) : conversation.possibleSilence ? (
           <div role="status" data-testid="possible-silence-banner" className="flex gap-2.5 border-b border-caution-400/30 bg-caution-900/40 px-4 py-2.5 text-[13px] sm:px-5">
@@ -188,6 +196,23 @@ export function Troubleshooter() {
               type="button"
               onClick={dismissExpired}
               aria-label="Dismiss session ended message"
+              className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </div>
+        )}
+
+        {restoreFailed && (
+          <div role="status" data-testid="restore-failed-notice" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
+            <p className="text-ink-200">
+              Your earlier conversation in this tab couldn&apos;t be restored safely, so it was cleared. Nothing from it has been used.
+              Please describe the problem again.
+            </p>
+            <button
+              type="button"
+              onClick={dismissRestoreFailed}
+              aria-label="Dismiss conversation not restored message"
               className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
             >
               <X aria-hidden className="size-3.5" />

@@ -1,31 +1,42 @@
-import { getFlowNode, MAX_INPUT_LENGTH } from "@/lib/troubleshooter/engine";
-import type { AnsweredQuestion, ChatMessage, ChooseReason, ConversationState, Observation, Step } from "@/lib/troubleshooter/types";
-import { isKnownEquipmentId } from "@/lib/content/equipment";
 import { getViewById } from "@/lib/content/views";
+import { isKnownEquipmentId } from "@/lib/content/equipment";
 import { hotspots } from "@/data/hotspots";
+import { troubleshootingTopics } from "@/data/troubleshooting-flows";
+import { createConversation, describeStep, MAX_INPUT_LENGTH, respond } from "@/lib/troubleshooter/engine";
+import type { ConversationState, UserInput } from "@/lib/troubleshooter/types";
 
 /**
- * Session persistence (RT-002 G).
+ * Session persistence — event-based (RT-002D).
  *
- * Radio Technics may run on shared studio computers, so a conversation is
- * kept only:
- *   - in sessionStorage (cleared when the browser tab closes), and
- *   - for SESSION_MAX_IDLE_MS since the last USER activity. The time saved is
- *     the last activity time supplied by the caller, never "now", so saves
- *     caused by background renders cannot extend a session.
- * Restored data is fully validated; anything malformed, from another
- * version, or referring to unknown content is discarded rather than used.
+ * Browser storage is UNTRUSTED: anyone with access to the browser can edit it.
+ * So the conversation itself is never stored. Only the presenter's inputs are
+ * (what they typed, which buttons they pressed, what they selected), and on
+ * restore the conversation is rebuilt by replaying those inputs through the
+ * same pure engine. Answers, urgency flags, message IDs and step positions are
+ * therefore always the engine's own — stored data can't fabricate them. Each
+ * input is validated before replay, and a button press is only accepted if
+ * that button was actually on screen at that point of the replay.
+ *
+ * Limitation: this guarantees the restored state is one the engine could have
+ * produced from those inputs. It cannot prove the inputs were typed by the
+ * presenter rather than edited into storage; browser storage offers no
+ * tamper-proof authenticity. That is acceptable because a forged input can
+ * only do what typing or clicking could do anyway.
+ *
+ * Kept only in sessionStorage (cleared when the tab closes) and only for
+ * SESSION_MAX_IDLE_MS after the last USER activity; the stored time is the
+ * last activity, never "now".
  */
 export const SESSION_KEY = "radio-technics.session";
-export const SESSION_VERSION = 3;
+export const SESSION_VERSION = 4;
+/** Bump when the engine's behaviour changes, so old inputs aren't replayed into a different conversation. */
+export const ENGINE_VERSION = "rt-002d.1";
 export const SESSION_MAX_IDLE_MS = 2 * 60 * 60 * 1000;
-
-const MAX_MESSAGES = 400;
-const MAX_TEXT = 2000;
-/** Larger than any real session; anything bigger is not ours (RT-QA-002B). */
+/** Larger than any real session; anything bigger is not ours. */
 export const MAX_STORED_CHARS = 1_000_000;
-const MAX_SEQ = 1_000_000;
-const MESSAGE_ID = /^m(\d{1,7})$/;
+export const MAX_EVENTS = 300;
+
+const OPTION_ID = /^(opt|confirm|equip|topic|u)[:-][a-z0-9-]{1,80}$|^(back|restart)$/;
 
 export interface SavedWorkspace {
   selectedEquipmentId: string | null;
@@ -33,10 +44,25 @@ export interface SavedWorkspace {
   activeViewId: string | null;
 }
 
+/** One presenter input, with the Studio Explorer selection at the time (part of the engine's context). */
+export interface SessionEvent {
+  input: UserInput;
+  selectedEquipmentId: string | null;
+}
+
 export interface SavedSession {
   version: typeof SESSION_VERSION;
+  engineVersion: string;
   /** When the user last did something (ms since epoch). */
   lastActivityAt: number;
+  events: SessionEvent[];
+  workspace: SavedWorkspace;
+}
+
+export interface RestoredSession {
+  lastActivityAt: number;
+  events: SessionEvent[];
+  /** Rebuilt by replaying `events`; never read from storage. */
   conversation: ConversationState;
   workspace: SavedWorkspace;
 }
@@ -57,71 +83,61 @@ export function getSessionStorage(): StorageLike | null {
 }
 
 /* ------------------------------------------------------------------ */
-/* Validation                                                          */
+/* Validation and replay                                               */
 /* ------------------------------------------------------------------ */
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const isText = (v: unknown, max = MAX_TEXT): v is string => typeof v === "string" && v.length <= max;
-const CHOOSE_REASONS: readonly ChooseReason[] = ["ambiguous", "vague", "unknown", "other"];
+const hasOnlyKeys = (v: Record<string, unknown>, keys: string[]) => Object.keys(v).every((k) => keys.includes(k));
 
-function parseStep(raw: unknown, depth = 0): Step | null {
-  if (!isObject(raw)) return null;
-  switch (raw.kind) {
-    case "start":
-      return { kind: "start" };
-    case "node":
-      return typeof raw.nodeId === "string" && getFlowNode(raw.nodeId) ? { kind: "node", nodeId: raw.nodeId } : null;
-    case "confirm":
-      return isKnownEquipmentId(raw.equipmentId) ? { kind: "confirm", equipmentId: raw.equipmentId } : null;
-    case "choose": {
-      const ids = raw.equipmentIds;
-      if (!Array.isArray(ids) || ids.length === 0 || !ids.every(isKnownEquipmentId)) return null;
-      if (!CHOOSE_REASONS.includes(raw.reason as ChooseReason)) return null;
-      return { kind: "choose", equipmentIds: [...ids], reason: raw.reason as ChooseReason };
+/** Validate one stored input's shape and references. Unknown keys are rejected. */
+export function parseEvent(raw: unknown): SessionEvent | null {
+  if (!isObject(raw) || !hasOnlyKeys(raw, ["input", "selectedEquipmentId"])) return null;
+  const selected = raw.selectedEquipmentId;
+  if (selected !== null && !isKnownEquipmentId(selected)) return null;
+  const input = raw.input;
+  if (!isObject(input)) return null;
+  switch (input.type) {
+    case "text": {
+      if (!hasOnlyKeys(input, ["type", "text"]) || typeof input.text !== "string") return null;
+      if (input.text.trim() === "" || input.text.length > MAX_INPUT_LENGTH) return null;
+      return { input: { type: "text", text: input.text }, selectedEquipmentId: selected };
     }
-    case "support": {
-      if (depth > 0) return null;
-      const returnTo = parseStep(raw.returnTo, depth + 1);
-      return returnTo && returnTo.kind !== "support" ? { kind: "support", returnTo } : null;
+    case "option": {
+      if (!hasOnlyKeys(input, ["type", "optionId"]) || typeof input.optionId !== "string" || !OPTION_ID.test(input.optionId)) return null;
+      return { input: { type: "option", optionId: input.optionId }, selectedEquipmentId: selected };
+    }
+    case "equipment": {
+      if (!hasOnlyKeys(input, ["type", "equipmentId"]) || !isKnownEquipmentId(input.equipmentId)) return null;
+      return { input: { type: "equipment", equipmentId: input.equipmentId }, selectedEquipmentId: selected };
+    }
+    case "topic": {
+      if (!hasOnlyKeys(input, ["type", "topicId"]) || typeof input.topicId !== "string") return null;
+      if (!troubleshootingTopics.some((t) => t.id === input.topicId)) return null;
+      return { input: { type: "topic", topicId: input.topicId }, selectedEquipmentId: selected };
     }
     default:
       return null;
   }
 }
 
-function parseMessage(raw: unknown): ChatMessage | null {
-  if (!isObject(raw) || typeof raw.id !== "string" || !isText(raw.text)) return null;
-  if (raw.role !== "assistant" && raw.role !== "user" && raw.role !== "notice") return null;
-  if (raw.help !== undefined && !isText(raw.help)) return null;
-  if (raw.urgent !== undefined && typeof raw.urgent !== "boolean") return null;
-  return { id: raw.id, role: raw.role, text: raw.text, help: raw.help as string | undefined, urgent: raw.urgent as boolean | undefined };
-}
-
-function parseAnswer(raw: unknown): AnsweredQuestion | null {
-  if (!isObject(raw) || !isText(raw.question) || !isText(raw.answer)) return null;
-  if (raw.source !== "button" && raw.source !== "typed") return null;
-  if (raw.certainty !== "confirmed" && raw.certainty !== "uncertain") return null;
-  if (raw.typedText !== undefined && !isText(raw.typedText, MAX_INPUT_LENGTH)) return null;
-  // Typed text belongs only to typed answers.
-  if (raw.typedText !== undefined && raw.source !== "typed") return null;
-  return { question: raw.question, answer: raw.answer, source: raw.source, certainty: raw.certainty, typedText: raw.typedText as string | undefined };
-}
-
-function parseObservation(raw: unknown): Observation | null {
-  if (!isObject(raw) || !isText(raw.text, MAX_INPUT_LENGTH)) return null;
-  if (raw.inReplyTo !== null && !isText(raw.inReplyTo)) return null;
-  return { text: raw.text, inReplyTo: raw.inReplyTo as string | null };
-}
-
-function parseList<T>(raw: unknown, parse: (item: unknown) => T | null, max: number): T[] | null {
-  if (!Array.isArray(raw) || raw.length > max) return null;
-  const out: T[] = [];
-  for (const item of raw) {
-    const parsed = parse(item);
-    if (!parsed) return null;
-    out.push(parsed);
+/**
+ * Rebuild a conversation from inputs. Returns null if any input could not
+ * have happened: a button that wasn't on screen at that point, or an input
+ * the engine rejected.
+ */
+export function replayEvents(events: readonly SessionEvent[]): ConversationState | null {
+  let state = createConversation();
+  for (const event of events) {
+    if (event.input.type === "option") {
+      const optionId = event.input.optionId;
+      if (optionId === "restart" || !describeStep(state).options.some((o) => o.id === optionId)) return null;
+    }
+    const before = state.messages.length;
+    state = respond(state, event.input, { selectedEquipmentId: event.selectedEquipmentId }).state;
+    // Every accepted input adds the presenter's own message; a notice-only change means it was rejected.
+    if (!state.messages.slice(before).some((m) => m.role === "user")) return null;
   }
-  return out;
+  return state;
 }
 
 /**
@@ -140,36 +156,6 @@ export function parseWorkspace(raw: unknown): SavedWorkspace {
   };
 }
 
-/** Validate an untrusted conversation. Returns null if anything is wrong. */
-export function parseConversation(raw: unknown): ConversationState | null {
-  if (!isObject(raw)) return null;
-  const step = parseStep(raw.step);
-  const messages = parseList(raw.messages, parseMessage, MAX_MESSAGES);
-  const answers = parseList(raw.answers, parseAnswer, MAX_MESSAGES);
-  const observations = parseList(raw.observations, parseObservation, MAX_MESSAGES);
-  if (!step || !messages || messages.length === 0 || !answers || !observations) return null;
-  if (raw.equipmentId !== null && !isKnownEquipmentId(raw.equipmentId)) return null;
-  if (typeof raw.urgent !== "boolean" || typeof raw.possibleSilence !== "boolean") return null;
-  // Added in RT-002C; older sessions don't have it and are treated as unconfirmed.
-  const confirmedOffAir = raw.confirmedOffAir === undefined ? false : raw.confirmedOffAir;
-  if (typeof confirmedOffAir !== "boolean" || (confirmedOffAir && !raw.urgent)) return null;
-  if (typeof raw.seq !== "number" || !Number.isSafeInteger(raw.seq) || raw.seq < messages.length || raw.seq > MAX_SEQ) return null;
-  if (new Set(messages.map((m) => m.id)).size !== messages.length) return null;
-  // IDs must look like the engine's own, and never run ahead of the counter (or new messages would collide).
-  if (!messages.every((m) => { const n = MESSAGE_ID.exec(m.id); return n !== null && Number(n[1]) <= (raw.seq as number); })) return null;
-  return {
-    step,
-    equipmentId: raw.equipmentId as string | null,
-    messages,
-    answers,
-    observations,
-    urgent: raw.urgent,
-    possibleSilence: raw.possibleSilence,
-    confirmedOffAir,
-    seq: raw.seq,
-  };
-}
-
 /* ------------------------------------------------------------------ */
 /* Load / save / clear                                                 */
 /* ------------------------------------------------------------------ */
@@ -179,9 +165,14 @@ export function isSessionExpired(lastActivityAt: number, now: number): boolean {
   return now - lastActivityAt > SESSION_MAX_IDLE_MS;
 }
 
-export function saveSession(storage: StorageLike | null, conversation: ConversationState, workspace: SavedWorkspace, lastActivityAt: number): void {
+export function saveSession(storage: StorageLike | null, events: readonly SessionEvent[], workspace: SavedWorkspace, lastActivityAt: number): void {
   if (!storage || !Number.isFinite(lastActivityAt)) return;
-  const data: SavedSession = { version: SESSION_VERSION, lastActivityAt, conversation, workspace };
+  if (events.length > MAX_EVENTS) {
+    // Too long to replay reliably: persistence is best-effort, so stop rather than save a partial history.
+    clearSession(storage);
+    return;
+  }
+  const data: SavedSession = { version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt, events: [...events], workspace };
   try {
     storage.setItem(SESSION_KEY, JSON.stringify(data));
   } catch {
@@ -197,12 +188,14 @@ export function clearSession(storage: StorageLike | null): void {
   }
 }
 
+export type DiscardReason = "expired" | "invalid" | "outdated";
+
 export type LoadResult =
   | { status: "none" }
-  | { status: "restored"; session: SavedSession }
-  | { status: "discarded"; reason: "expired" | "invalid" | "outdated" };
+  | { status: "restored"; session: RestoredSession }
+  | { status: "discarded"; reason: DiscardReason };
 
-/** Load and validate a saved session. Invalid or expired data is deleted. */
+/** Load, validate and replay a saved session. Anything that can't be safely rebuilt is deleted. */
 export function loadSession(storage: StorageLike | null, now = Date.now()): LoadResult {
   if (!storage) return { status: "none" };
   let raw: string | null;
@@ -212,15 +205,12 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
     return { status: "none" };
   }
   if (raw === null) return { status: "none" };
-  if (raw.length > MAX_STORED_CHARS) {
-    clearSession(storage);
-    return { status: "discarded", reason: "invalid" };
-  }
 
-  const discard = (reason: "expired" | "invalid" | "outdated"): LoadResult => {
+  const discard = (reason: DiscardReason): LoadResult => {
     clearSession(storage);
     return { status: "discarded", reason };
   };
+  if (raw.length > MAX_STORED_CHARS) return discard("invalid");
 
   let data: unknown;
   try {
@@ -229,13 +219,20 @@ export function loadSession(storage: StorageLike | null, now = Date.now()): Load
     return discard("invalid");
   }
   if (!isObject(data)) return discard("invalid");
-  if (data.version !== SESSION_VERSION) return discard("outdated");
+  if (data.version !== SESSION_VERSION || data.engineVersion !== ENGINE_VERSION) return discard("outdated");
   const last = data.lastActivityAt;
   if (typeof last !== "number" || !Number.isFinite(last) || last > now + 60_000) return discard("invalid");
   if (isSessionExpired(last, now)) return discard("expired");
 
-  const conversation = parseConversation(data.conversation);
+  if (!Array.isArray(data.events) || data.events.length > MAX_EVENTS) return discard("invalid");
+  const events: SessionEvent[] = [];
+  for (const item of data.events) {
+    const event = parseEvent(item);
+    if (!event) return discard("invalid");
+    events.push(event);
+  }
+  const conversation = replayEvents(events);
   if (!conversation) return discard("invalid");
-  const workspace = parseWorkspace(data.workspace);
-  return { status: "restored", session: { version: SESSION_VERSION, lastActivityAt: last, conversation, workspace } };
+
+  return { status: "restored", session: { lastActivityAt: last, events, conversation, workspace: parseWorkspace(data.workspace) } };
 }

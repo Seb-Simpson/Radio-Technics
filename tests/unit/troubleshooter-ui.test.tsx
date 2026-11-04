@@ -152,7 +152,7 @@ describe("Troubleshooter UI", () => {
     renderWithProviders(<Troubleshooter />);
     const input = screen.getByLabelText("Describe the problem");
     await user.type(input, "Can someone help me? We're off air.{Enter}");
-    expect(screen.getByTestId("urgent-banner")).toHaveTextContent("Urgent: silence on air reported.");
+    expect(screen.getByTestId("urgent-banner")).toHaveTextContent("Urgent: a broadcast interruption has been reported.");
     await user.type(input, "I need a human{Enter}");
     expect(screen.getByTestId("urgent-banner")).toBeInTheDocument();
   });

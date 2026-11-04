@@ -1,4 +1,6 @@
 import type { WorkspaceCommand } from "@/lib/workspace/commands";
+import type { ClaimSubject } from "./claims";
+import type { BroadcastStatus } from "./safety";
 import type { AudioClaim } from "./understand";
 
 /* ------------------------------------------------------------------ */
@@ -20,6 +22,16 @@ export interface FlowOption {
    * absent. A typed reply describing the opposite can never select it.
    */
   audio?: AudioClaim;
+  /**
+   * What choosing this option asserts about another subject the question asks
+   * about (RT-002D answer schema), e.g. the level meters moving.
+   */
+  asserts?: { subject: Exclude<ClaimSubject, "sound">; value: boolean };
+  /**
+   * How to restate this answer when asking the presenter to confirm an
+   * interpretation of their typed words: "It sounds like {restate}. Is that right?"
+   */
+  restate?: string;
   /** Specific lower-case phrases that identify this option when typed (negated mentions are ignored). */
   match?: string[];
   /** Switch the conversation's equipment context when chosen. */
@@ -67,7 +79,13 @@ export type Step =
   | { kind: "node"; nodeId: string }
   | { kind: "confirm"; equipmentId: string }
   | { kind: "choose"; equipmentIds: string[]; reason: ChooseReason }
-  | { kind: "support"; returnTo: Step };
+  | { kind: "support"; returnTo: Step }
+  /**
+   * RT-002D: typed words were interpreted as `optionId` on `nodeId`, but that is
+   * only a tentative interpretation. Nothing is recorded until the presenter
+   * confirms it (or picks another answer) with a button.
+   */
+  | { kind: "check"; nodeId: string; optionId: string; basedOn: string };
 
 export type MessageRole = "assistant" | "user" | "notice";
 
@@ -81,9 +99,18 @@ export interface ChatMessage {
 
 /** A diagnostic answer: a button choice, or a typed reply mapped to an option. */
 export interface AnsweredQuestion {
+  /** RT-002D provenance: the question (node ID, `confirm:<equipment>` or `choose`) and option IDs. */
+  questionId: string;
+  optionId: string;
   question: string;
   answer: string;
-  source: "button" | "typed";
+  /**
+   * `button` — the presenter pressed the answer.
+   * `typed` — the presenter typed the answer's exact label, or a bare yes/no/not sure.
+   * `confirmed-interpretation` — the presenter confirmed (button or bare "yes")
+   *   the system's restatement of their own words, quoted in `typedText`.
+   */
+  source: "button" | "typed" | "confirmed-interpretation";
   /** `uncertain` for "I'm not sure", hedged replies and inferred answers. */
   certainty: "confirmed" | "uncertain";
   /** Verbatim text when the answer was typed. */
@@ -116,6 +143,12 @@ export interface ConversationState {
    * is being treated as urgent as a precaution. Never cleared automatically.
    */
   confirmedOffAir: boolean;
+  /**
+   * RT-002D: every broadcast-safety reading that wasn't "none", with the
+   * presenter's words — including historical, hypothetical and denied ones,
+   * which never raise urgency but are kept for technical support.
+   */
+  broadcastReports: { status: BroadcastStatus; text: string }[];
   /** Monotonic counter for message IDs (keeps the engine pure and deterministic). */
   seq: number;
 }

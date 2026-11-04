@@ -2,23 +2,25 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { Troubleshooter } from "@/components/troubleshooter/Troubleshooter";
-import { createConversation, respond } from "@/lib/troubleshooter/engine";
 import {
+  ENGINE_VERSION,
+  MAX_EVENTS,
   SESSION_KEY,
   SESSION_MAX_IDLE_MS,
   SESSION_VERSION,
   loadSession,
-  parseConversation,
+  replayEvents,
   saveSession,
+  type SessionEvent,
 } from "@/lib/session/storage";
 import { renderWithProviders } from "./render";
 
-const ctx = { selectedEquipmentId: null };
-function sampleConversation() {
-  let s = createConversation();
-  s = respond(s, { type: "text", text: "The green thing isn't working" }, ctx).state;
-  s = respond(s, { type: "option", optionId: "confirm:yes" }, ctx).state;
-  return s;
+/** RT-002D: sessions store the presenter's inputs; the conversation is rebuilt by replay. */
+function sampleEvents(): SessionEvent[] {
+  return [
+    { input: { type: "text", text: "The green thing isn't working" }, selectedEquipmentId: null },
+    { input: { type: "option", optionId: "confirm:yes" }, selectedEquipmentId: null },
+  ];
 }
 
 function memoryStorage() {
@@ -32,22 +34,26 @@ function memoryStorage() {
 }
 
 const NOW = 1_800_000_000_000;
+const stored = (events: unknown, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt: NOW, events, workspace: {}, ...extra });
 
 describe("session storage", () => {
-  it("round-trips a conversation and workspace", () => {
+  it("round-trips inputs and workspace; the conversation is the engine's own replay", () => {
     const storage = memoryStorage();
-    const conversation = sampleConversation();
-    saveSession(storage, conversation, { selectedEquipmentId: "green-next-button", selectedHotspotId: "green-button-button", activeViewId: "green-button" }, NOW);
+    saveSession(storage, sampleEvents(), { selectedEquipmentId: "green-next-button", selectedHotspotId: "green-button-button", activeViewId: "green-button" }, NOW);
     const result = loadSession(storage, NOW + 1000);
     expect(result.status).toBe("restored");
     if (result.status !== "restored") return;
-    expect(result.session.conversation).toEqual(conversation);
+    expect(result.session.conversation).toEqual(replayEvents(sampleEvents()));
+    expect(result.session.conversation.step).toEqual({ kind: "node", nodeId: "gb-screen" });
     expect(result.session.workspace).toEqual({ selectedEquipmentId: "green-next-button", selectedHotspotId: "green-button-button", activeViewId: "green-button" });
+    // The conversation itself is never written to storage.
+    expect(JSON.parse(storage.map.get(SESSION_KEY)!)).not.toHaveProperty("conversation");
   });
 
   it("expires after the idle limit and deletes the data", () => {
     const storage = memoryStorage();
-    saveSession(storage, sampleConversation(), { selectedEquipmentId: null, activeViewId: null }, NOW);
+    saveSession(storage, sampleEvents(), { selectedEquipmentId: null, activeViewId: null }, NOW);
     expect(loadSession(storage, NOW + SESSION_MAX_IDLE_MS + 1)).toEqual({ status: "discarded", reason: "expired" });
     expect(storage.map.has(SESSION_KEY)).toBe(false);
   });
@@ -56,7 +62,8 @@ describe("session storage", () => {
     ["corrupt JSON", "{not json"],
     ["a non-object", "42"],
     ["an older version", JSON.stringify({ version: SESSION_VERSION - 1, lastActivityAt: NOW, conversation: {} })],
-    ["a future timestamp", JSON.stringify({ version: SESSION_VERSION, lastActivityAt: NOW + 10 * 60_000, conversation: sampleConversation(), workspace: {} })],
+    ["another engine version", stored(sampleEvents(), { engineVersion: "rt-001" })],
+    ["a future timestamp", stored(sampleEvents(), { lastActivityAt: NOW + 10 * 60_000 })],
   ])("discards %s safely", (_label, raw) => {
     const storage = memoryStorage();
     storage.setItem(SESSION_KEY, raw);
@@ -69,38 +76,62 @@ describe("session storage", () => {
     expect(loadSession(null, NOW)).toEqual({ status: "none" });
     const throwing = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("full"); }, removeItem: () => {} };
     expect(loadSession(throwing, NOW)).toEqual({ status: "none" });
-    expect(() => saveSession(throwing, sampleConversation(), { selectedEquipmentId: null, activeViewId: null }, NOW)).not.toThrow();
+    expect(() => saveSession(throwing, sampleEvents(), { selectedEquipmentId: null, activeViewId: null }, NOW)).not.toThrow();
   });
 
-  describe("rejects tampered or outdated conversations", () => {
-    const valid = () => JSON.parse(JSON.stringify(sampleConversation()));
-    it.each([
-      ["unknown flow node", (c: any) => ((c.step = { kind: "node", nodeId: "skip-to-fix" }), c)],
-      ["unknown equipment in step", (c: any) => ((c.step = { kind: "confirm", equipmentId: "toaster" }), c)],
-      ["unknown equipment context", (c: any) => ((c.equipmentId = "toaster"), c)],
-      ["nested support steps", (c: any) => ((c.step = { kind: "support", returnTo: { kind: "support", returnTo: { kind: "start" } } }), c)],
-      ["non-boolean urgent flag", (c: any) => ((c.urgent = "no"), c)],
-      ["bad message role", (c: any) => ((c.messages[0].role = "system"), c)],
-      ["oversized observation", (c: any) => ((c.observations[0].text = "x".repeat(10_000)), c)],
-      ["answer with an invented source", (c: any) => ((c.answers[0].source = "ai"), c)],
-      ["too many messages", (c: any) => ((c.messages = Array.from({ length: 401 }, (_, i) => ({ id: `m${i}`, role: "user", text: "x" }))), c)],
-      ["duplicate message IDs", (c: any) => ((c.messages[1].id = c.messages[0].id), c)],
-      ["sequence behind messages", (c: any) => ((c.seq = 0), c)],
-      ["missing fields", (c: any) => (delete c.observations, c)],
-    ])("%s", (_label, tamper) => {
-      expect(parseConversation(tamper(valid()))).toBeNull();
+  describe("rejects tampered inputs", () => {
+    const text = (t: string) => ({ input: { type: "text", text: t }, selectedEquipmentId: null });
+    const option = (id: string) => ({ input: { type: "option", optionId: id }, selectedEquipmentId: null });
+    it.each<[string, unknown]>([
+      ["a button that was never on screen (skipping to an urgent answer)", [text("The green thing isn't working"), option("opt:no-silent")]],
+      ["a button for a later question", [option("confirm:yes")]],
+      ["an option ID that isn't an option ID", [text("hi"), option("<script>")]],
+      ["the restart button (only End session clears)", [text("hi"), option("restart")]],
+      ["unknown equipment", [{ input: { type: "equipment", equipmentId: "toaster" }, selectedEquipmentId: null }]],
+      ["unknown selection context", [{ input: { type: "text", text: "hi" }, selectedEquipmentId: "toaster" }]],
+      ["an unknown topic", [{ input: { type: "topic", topicId: "topic-fix-everything" }, selectedEquipmentId: null }]],
+      ["an unknown input type", [{ input: { type: "answer", answer: "Yes, they move" }, selectedEquipmentId: null }]],
+      ["extra fields smuggled into an input", [{ input: { type: "text", text: "hi", urgent: true }, selectedEquipmentId: null }]],
+      ["extra fields on an event", [{ ...text("hi"), answers: [{ answer: "Yes" }] }]],
+      ["empty text", [text("   ")]],
+      ["oversized text", [text("x".repeat(501))]],
+      ["events that aren't a list", { 0: text("hi") }],
+      ["too many events", Array.from({ length: MAX_EVENTS + 1 }, () => text("hi"))],
+    ])("%s", (_label, events) => {
+      const storage = memoryStorage();
+      storage.setItem(SESSION_KEY, stored(events));
+      expect(loadSession(storage, NOW)).toEqual({ status: "discarded", reason: "invalid" });
+      expect(storage.map.has(SESSION_KEY)).toBe(false);
     });
 
-    it("accepts the untouched conversation", () => {
-      expect(parseConversation(valid())).not.toBeNull();
+    it("ignores stored state: urgency and answers are only ever the engine's own", () => {
+      const storage = memoryStorage();
+      storage.setItem(
+        SESSION_KEY,
+        stored(sampleEvents(), {
+          conversation: { urgent: true, confirmedOffAir: true, answers: [{ question: "Q", answer: "No — there's silence", source: "button" }] },
+          urgent: true,
+        }),
+      );
+      const result = loadSession(storage, NOW);
+      expect(result.status).toBe("restored");
+      if (result.status !== "restored") return;
+      expect(result.session.conversation.urgent).toBe(false);
+      expect(result.session.conversation.confirmedOffAir).toBe(false);
+      expect(result.session.conversation.answers.map((a) => a.answer)).toEqual(["Yes, that's it"]);
+    });
+
+    it("accepts the untouched inputs", () => {
+      const storage = memoryStorage();
+      storage.setItem(SESSION_KEY, stored(sampleEvents()));
+      expect(loadSession(storage, NOW).status).toBe("restored");
     });
   });
 });
 
 describe("session restore in the app", () => {
   it("restores a conversation after a reload and says so", async () => {
-    const conversation = sampleConversation();
-    saveSession(window.sessionStorage, conversation, { selectedEquipmentId: "green-next-button", activeViewId: null }, Date.now());
+    saveSession(window.sessionStorage, sampleEvents(), { selectedEquipmentId: "green-next-button", activeViewId: null }, Date.now());
     renderWithProviders(<Troubleshooter />);
     const log = screen.getByRole("log", { name: "Conversation" });
     expect(await within(log).findByText("The green thing isn't working")).toBeInTheDocument();
@@ -108,11 +139,12 @@ describe("session restore in the app", () => {
     expect(screen.getByText("Selected in Studio Explorer:")).toBeInTheDocument();
   });
 
-  it("does not restore invalid data and does not crash", async () => {
-    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: SESSION_VERSION, lastActivityAt: Date.now(), conversation: { step: { kind: "node", nodeId: "nope" } } }));
+  it("does not restore invalid data, does not crash, and says it was cleared", async () => {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt: Date.now(), events: [{ input: { type: "option", optionId: "opt:no-silent" }, selectedEquipmentId: null }] }));
     renderWithProviders(<Troubleshooter />);
     await waitFor(() => expect(window.sessionStorage.getItem(SESSION_KEY)).toBeNull());
     expect(screen.queryByText(/has been restored/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("restore-failed-notice")).toHaveTextContent(/couldn.t be restored safely/);
     expect(screen.getByRole("button", { name: "End session" })).toBeDisabled();
   });
 
@@ -122,7 +154,10 @@ describe("session restore in the app", () => {
     await user.type(screen.getByLabelText("Describe the problem"), "dead air{Enter}");
     await waitFor(() => expect(window.sessionStorage.getItem(SESSION_KEY)).toContain("dead air"));
     const saved = JSON.parse(window.sessionStorage.getItem(SESSION_KEY)!);
-    expect(saved.conversation.urgent).toBe(true);
+    expect(saved.events).toEqual([{ input: { type: "text", text: "dead air" }, selectedEquipmentId: null }]);
+    expect(saved).not.toHaveProperty("conversation");
+    // Urgency comes back from replaying the presenter's words.
+    expect(replayEvents(saved.events)?.urgent).toBe(true);
 
     await user.click(screen.getByRole("button", { name: "End session" }));
     await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "End session" }));

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { Troubleshooter } from "@/components/troubleshooter/Troubleshooter";
 import { hotspots } from "@/data/hotspots";
-import { loadSession, MAX_STORED_CHARS, parseConversation, parseWorkspace, SESSION_KEY, SESSION_VERSION, saveSession } from "@/lib/session/storage";
+import { ENGINE_VERSION, loadSession, MAX_STORED_CHARS, parseWorkspace, replayEvents, SESSION_KEY, SESSION_VERSION, saveSession, type SessionEvent } from "@/lib/session/storage";
 import { createConversation, respond } from "@/lib/troubleshooter/engine";
 import { understand } from "@/lib/troubleshooter/understand";
 import { renderWithProviders } from "./render";
@@ -96,7 +96,7 @@ describe("11b. choosing the same equipment again renews activity", () => {
 
 describe("12. restored data is validated defensively", () => {
   const T0 = 1_900_000_000_000;
-  const base = () => respond(createConversation(), { type: "text", text: "dead air" }, { selectedEquipmentId: null }).state;
+  const baseEvents = (): SessionEvent[] => [{ input: { type: "text", text: "dead air" }, selectedEquipmentId: null }];
   const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
   const memory = () => {
     const data = new Map<string, string>();
@@ -108,31 +108,28 @@ describe("12. restored data is validated defensively", () => {
     };
   };
 
-  it("accepts a real conversation", () => {
-    expect(parseConversation(json(base()))).not.toBeNull();
-  });
-
-  it("reads a session saved before RT-002C (no confirmedOffAir) as unconfirmed", () => {
-    const old = json(base());
-    delete old.confirmedOffAir;
-    expect(parseConversation(old)?.confirmedOffAir).toBe(false);
-  });
-
+  // RT-002D: the conversation is no longer stored at all — only inputs are,
+  // and state is rebuilt by replay. So every tampering below, written into
+  // storage, must have NO effect on what is restored.
   it.each<[string, (c: Record<string, unknown>) => void]>([
     ["confirmedOffAir is not a boolean", (c) => (c.confirmedOffAir = "yes")],
     ["confirmedOffAir without urgency", (c) => ((c.confirmedOffAir = true), (c.urgent = false))],
+    ["urgency injected", (c) => ((c.urgent = true), (c.confirmedOffAir = true))],
     ["seq is not a safe integer", (c) => (c.seq = 1e20)],
-    ["seq is fractional", (c) => (c.seq = 4.5)],
-    ["seq is absurdly large", (c) => (c.seq = 50_000_000)],
-    ["a message ID is not the engine's format", (c) => ((c.messages as { id: string }[])[0]!.id = "x1")],
-    ["a message ID runs ahead of seq (new messages would collide)", (c) => ((c.messages as { id: string }[])[0]!.id = `m${(c.seq as number) + 5}`)],
-    ["typed text on a button answer", (c) => (c.answers = [{ question: "Q", answer: "A", source: "button", certainty: "confirmed", typedText: "x" }])],
+    ["a message ID is m0 / not sequential", (c) => ((c.messages as { id: string }[])[0]!.id = "m0")],
+    ["a fabricated confirmed answer", (c) => (c.answers = [{ questionId: "gb-current-song", optionId: "opt:no-silent", question: "Q", answer: "No — there's silence", source: "button", certainty: "confirmed" }])],
     ["a message with an unknown role", (c) => ((c.messages as { role: string }[])[0]!.role = "system")],
-    ["too many messages", (c) => (c.messages = Array.from({ length: 401 }, (_, i) => ({ id: `m${i + 1}`, role: "user", text: "x" })))],
-  ])("rejects a conversation where %s", (_label, mutate) => {
-    const c = json(base());
-    mutate(c);
-    expect(parseConversation(c)).toBeNull();
+  ])("stored state where %s is ignored; the replay decides", (_label, mutate) => {
+    const store = memory();
+    const conversation = json(replayEvents(baseEvents())!);
+    mutate(conversation);
+    store.setItem(SESSION_KEY, JSON.stringify({ version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt: T0, events: baseEvents(), workspace: {}, conversation }));
+    const result = loadSession(store, T0);
+    expect(result.status).toBe("restored");
+    if (result.status !== "restored") return;
+    expect(result.session.conversation).toEqual(replayEvents(baseEvents()));
+    // Canonical, sequential message IDs: m1, m2, …
+    expect(result.session.conversation.messages.map((m) => m.id)).toEqual(result.session.conversation.messages.map((_, i) => `m${i + 1}`));
   });
 
   it("drops workspace IDs that don't exist or don't belong together", () => {
@@ -164,7 +161,7 @@ describe("12. restored data is validated defensively", () => {
 
   it("a __proto__ key in stored data cannot pollute objects", () => {
     const store = memory();
-    saveSession(store, base(), { selectedEquipmentId: null, activeViewId: null }, T0);
+    saveSession(store, baseEvents(), { selectedEquipmentId: null, activeViewId: null }, T0);
     const raw = store.getItem(SESSION_KEY)!.replace('"workspace":{', '"workspace":{"__proto__":{"polluted":true},');
     store.setItem(SESSION_KEY, raw);
     const result = loadSession(store, T0);
@@ -177,8 +174,8 @@ describe("12. restored data is validated defensively", () => {
     ["not JSON", "{"],
     ["an array", "[]"],
     ["another version", JSON.stringify({ version: SESSION_VERSION + 1 })],
-    ["a future activity time", JSON.stringify({ version: SESSION_VERSION, lastActivityAt: T0 + 3_600_000, conversation: {}, workspace: {} })],
-    ["a non-numeric activity time", JSON.stringify({ version: SESSION_VERSION, lastActivityAt: "now", conversation: {}, workspace: {} })],
+    ["a future activity time", JSON.stringify({ version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt: T0 + 3_600_000, events: [], workspace: {} })],
+    ["a non-numeric activity time", JSON.stringify({ version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt: "now", events: [], workspace: {} })],
   ])("discards %s, and deletes it", (_label, raw) => {
     const store = memory();
     store.setItem(SESSION_KEY, raw);
@@ -199,6 +196,6 @@ describe("12. restored data is validated defensively", () => {
       },
     };
     expect(loadSession(throwing, T0)).toEqual({ status: "none" });
-    expect(() => saveSession(throwing, base(), { selectedEquipmentId: null, activeViewId: null }, T0)).not.toThrow();
+    expect(() => saveSession(throwing, baseEvents(), { selectedEquipmentId: null, activeViewId: null }, T0)).not.toThrow();
   });
 });

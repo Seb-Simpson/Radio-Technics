@@ -54,25 +54,56 @@ export function Troubleshooter() {
     };
   }, [setEmbeddedExplorerVisible]);
 
-  // Keep the newest message in view and move keyboard focus to the new options.
+  /*
+   * RT-QA-002C: ONE scroll owner. After each conversation update (and after
+   * layout, in the next frame) exactly one scroll instruction is issued:
+   *   - Fixed-height wide layout: only the log scrolls; the page never moves.
+   *   - Flowing layout (phones, short windows): if the first new assistant
+   *     message and the reply box fit on screen together, show both with the
+   *     reply box at the bottom; otherwise show the new question at the top and
+   *     leave the reply box one Tab / scroll away. Nothing else scrolls: focus
+   *     moves use preventScroll, and sending doesn't scroll on its own.
+   * Respects prefers-reduced-motion.
+   */
+  const shownMessages = useRef(conversation.messages.length);
   useEffect(() => {
-    const log = logRef.current;
-    if (log && log.scrollHeight > log.clientHeight + 1) {
-      // Wide layout: the log scrolls internally.
-      log.scrollTop = log.scrollHeight;
-    } else if (log && conversation.messages.length > 1) {
-      // Phones/tablets: the page scrolls. Bring the newest message into view below the header.
-      const last = log.querySelector("li:last-child");
-      const top = last ? last.getBoundingClientRect().top : 0;
-      if (last && (top < 72 || top > window.innerHeight - 240)) {
-        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-        window.scrollTo?.({ top: window.scrollY + top - 80, behavior: reduce ? "auto" : "smooth" });
+    const previous = shownMessages.current;
+    shownMessages.current = conversation.messages.length;
+    const frame = requestAnimationFrame(() => {
+      const log = logRef.current;
+      if (!log) return;
+      const behavior: ScrollBehavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      const logScrolls = getComputedStyle(log).overflowY === "auto" || getComputedStyle(log).overflowY === "scroll";
+      if (logScrolls) {
+        log.scrollTo?.({ top: log.scrollHeight, behavior });
+      } else if (conversation.messages.length > 1 && conversation.messages.length !== previous) {
+        // The reply to the presenter's latest message (also right after a restore).
+        const items = [...log.querySelectorAll<HTMLElement>("li[data-role]")];
+        const lastUser = items.map((el) => el.dataset.role).lastIndexOf("user");
+        const target = items.slice(lastUser + 1).find((el) => el.dataset.role === "assistant") ?? items[items.length - 1];
+        const form = formRef.current;
+        if (target && form) {
+          const header = document.querySelector<HTMLElement>("[data-app-header]");
+          const headerStyle = header ? getComputedStyle(header).position : "";
+          const headerBottom = header && (headerStyle === "sticky" || headerStyle === "fixed") ? header.getBoundingClientRect().bottom : 0;
+          const topLimit = headerBottom + 8;
+          const bottomLimit = window.innerHeight - 8;
+          const messageTop = target.getBoundingClientRect().top;
+          const formBottom = form.getBoundingClientRect().bottom;
+          const bothVisible = messageTop >= topLimit && formBottom <= bottomLimit;
+          if (!bothVisible) {
+            const fits = formBottom - messageTop <= bottomLimit - topLimit;
+            const delta = fits ? formBottom - bottomLimit : messageTop - topLimit;
+            window.scrollTo?.({ top: Math.max(0, window.scrollY + delta), behavior });
+          }
+        }
       }
-    }
-    if (focusOptionsNext.current) {
-      focusOptionsNext.current = false;
-      optionsRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
-    }
+      if (focusOptionsNext.current) {
+        focusOptionsNext.current = false;
+        optionsRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [conversation.messages.length]);
 
   const [confirmingClear, setConfirmingClear] = useState(false);
@@ -110,12 +141,8 @@ export function Troubleshooter() {
     }
     setInputError(null);
     // If the session had expired it is cleared and the message is not sent; keep the text so it can be resent.
-    if (send({ type: "text", text: draft })) {
-      setDraft("");
-      // Where the page flows (phones, short windows) new messages push the reply box
-      // down; keep it on screen so the conversation can continue.
-      requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
-    }
+    // Scrolling after sending is handled by the single scroll owner above.
+    if (send({ type: "text", text: draft })) setDraft("");
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -372,14 +399,14 @@ export function Troubleshooter() {
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "notice") {
     return (
-      <li className="animate-fade-up self-center rounded-full border border-ink-700 bg-ink-850 px-3 py-1 text-center text-[13px] text-ink-300">
+      <li data-role="notice" className="animate-fade-up self-center rounded-full border border-ink-700 bg-ink-850 px-3 py-1 text-center text-[13px] text-ink-300">
         {message.text}
       </li>
     );
   }
   const assistant = message.role === "assistant";
   return (
-    <li className={cn("animate-fade-up flex max-w-[92%] flex-col gap-1", assistant ? "self-start" : "self-end items-end")}>
+    <li data-role={message.role} className={cn("animate-fade-up flex max-w-[92%] flex-col gap-1", assistant ? "self-start" : "self-end items-end")}>
       <span className="font-mono text-[10px] font-medium tracking-[0.12em] text-ink-400 uppercase">
         {assistant ? "Troubleshooter (prototype)" : "You"}
       </span>

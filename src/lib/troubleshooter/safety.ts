@@ -88,7 +88,8 @@ const ELLIPTICAL_DENIAL = /^(no )?(we|it|they|the station) (are|is|were|was) not
 /** The broadcast is (now) fine. */
 const RECOVERY = ["back on air", "back now", "working now", "fine now", "ok now", "okay now", "everything is working", "everything works", "all working", "it is back", "we are back", "came back", "come back", "back to normal", "sorted now", "resolved", "fixed now", "it is fixed", "still on air", "we are on air", "we are still on air", "on air now", "listeners can hear"];
 const PAST_TIME = ["earlier", "before", "this morning", "this afternoon", "yesterday", "last night", "last week", "last hour", "ago", "previously", "at the weekend", "for a bit", "for a while", "briefly", "for a moment", "a minute ago", "a moment ago"];
-const PAST_FORMS = /\b(were|was|had been|went|had gone)\b/;
+const PAST_FORMS = /\b(were|was|had|had been|went|had gone|dropped|lost)\b/;
+const ONGOING = /\b(since|still|now|right now|at the moment|currently|ever since|for the last)\b/;
 /** Planned time off air is not a fault ("we're not on air until six"). */
 const NOT_YET = /\b(yet|until|till|before the show|tonight|tomorrow)\b/;
 const CONDITIONAL = /\b(would|could|will) (be|go|have|end up)\b.*\b(if|unless|otherwise|when)\b|\b(if|unless|in case|what happens if|what if|suppose|supposing|imagine)\b/;
@@ -135,7 +136,10 @@ function readClause(clause: string, index: number, questions: Set<string>, messa
   }
   if (modality === "negated-belief") return { clause, status: "denied", index, explicit: true };
   const past = PAST_FORMS.test(stripped) && !/\b(have|has) (stopped|gone)\b/.test(stripped);
-  if (past && (hasAny(stripped, PAST_TIME) || hasAny(messageText, RECOVERY))) return { clause, status: "historical", index };
+  // A past time reference makes it historical unless it is said to be ongoing
+  // ("off air since earlier", "still off air"); a past verb plus a recovery too.
+  const ongoing = ONGOING.test(stripped);
+  if (!ongoing && (hasAny(stripped, PAST_TIME) || (past && hasAny(messageText, RECOVERY)))) return { clause, status: "historical", index };
   if (modality === "question" || modality === "uncertain" || modality === "hedged" || past) return { clause, status: "current-possible", index };
   return { clause, status: "current-confirmed", index };
 }

@@ -210,3 +210,8 @@ Manual checks:
 
 **Status:** All RT-QA-002C reproductions corrected and covered by permanent tests; see `docs/RT-002D-REPORT.md`. The architecture now separates observation, interpretation, confirmation, broadcast safety and authorised actions. Tested by the development team only; not yet independently re-audited; not tested on physical devices.
 **Branch:** `fix/rt-002d-diagnostic-safety` from `79eb0b0`. Not merged, not deployed.
+
+## RT-002D-R1 — Safety enforcement remediation (RT-QA-002D)
+
+**Status:** All RT-QA-002D findings quoted in the brief corrected and covered by tests; see `docs/RT-002D-R1-REPORT.md`. One answer path (displayed option + active question instance), incident model, explicit urgent/resumed controls, corrections, identifier-only AI contract, Knowledge Centre safety hand-off. **Not independently audited**; not tested on physical devices.
+**Branch:** `fix/rt-002d-diagnostic-safety` (PR #6). Not merged, not deployed.

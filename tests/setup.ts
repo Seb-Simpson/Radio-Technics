@@ -1,6 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import { ACTIVATION_GUARD } from "@/components/troubleshooter/activation-guard";
+
+// Unit tests press buttons instantly; the 300 ms double-tap guard is covered by the browser tests.
+ACTIVATION_GUARD.ms = 0;
 
 /** Mutable mock router state shared with tests. */
 export const navigation = {

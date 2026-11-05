@@ -4,6 +4,7 @@ import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, PencilLine, RadioTower, R
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { ConfirmClear } from "./ConfirmClear";
 import { UrgentBroadcastButton } from "./UrgentBroadcastButton";
+import { ACTIVATION_GUARD } from "./activation-guard";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { getEquipmentById } from "@/lib/content/equipment";
@@ -39,6 +40,15 @@ export function Troubleshooter() {
   const universalOptions = step.options.filter((o) => o.kind === "universal");
   const navOptions = step.options.filter((o) => o.kind === "restart" || o.kind === "back" || o.kind === "correct");
   const incidentActive = conversation.incident.status === "possible" || conversation.incident.status === "confirmed";
+
+  // A new question's buttons are armed only after a short pause (see activation-guard.ts).
+  const [armedInstance, setArmedInstance] = useState<number | null>(null);
+  useEffect(() => {
+    if (ACTIVATION_GUARD.ms === 0) return;
+    const timer = window.setTimeout(() => setArmedInstance(step.instanceId), ACTIVATION_GUARD.ms);
+    return () => window.clearTimeout(timer);
+  }, [step.instanceId]);
+  const armed = ACTIVATION_GUARD.ms === 0 || armedInstance === step.instanceId;
   const showSummary = step.kind === "support" || step.kind === "outcome";
 
   // Show the studio beside the chat on wide screens; otherwise "Show me where" navigates.
@@ -96,7 +106,10 @@ export function Troubleshooter() {
           const bothVisible = messageTop >= topLimit && formBottom <= bottomLimit;
           if (!bothVisible) {
             const fits = formBottom - messageTop <= bottomLimit - topLimit;
-            const delta = fits ? formBottom - bottomLimit : messageTop - topLimit;
+            // A focused reply box must never be scrolled out of view (WCAG 2.4.11):
+            // after typing, keep it visible and show as much of the reply as fits.
+            const composerFocused = form.contains(document.activeElement);
+            const delta = fits || composerFocused ? formBottom - bottomLimit : messageTop - topLimit;
             window.scrollTo?.({ top: Math.max(0, window.scrollY + delta), behavior });
           }
         }
@@ -134,6 +147,7 @@ export function Troubleshooter() {
    */
   const choose = (option: StepOption, event?: MouseEvent<HTMLButtonElement>) => {
     if (event && event.detail > 1) return;
+    if (!armed) return;
     if (option.kind === "restart") {
       requestClear();
       return;
@@ -351,6 +365,7 @@ export function Troubleshooter() {
                     key={`${step.instanceId}:${option.id}`}
                     type="button"
                     onClick={(event) => choose(option, event)}
+                    aria-disabled={armed ? undefined : true}
                     className="rounded-lg border border-ink-600 bg-ink-800 px-3.5 py-2.5 text-left text-[15px] font-medium text-ink-50 transition-colors hover:border-signal-500/60 hover:bg-ink-750"
                   >
                     {option.label}
@@ -364,14 +379,16 @@ export function Troubleshooter() {
                 {universalOptions.map((option) => {
                   const Icon = universalIcons[option.id] ?? CircleHelp;
                   return (
-                    <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)} className={buttonStyles({ size: "sm" })}>
+                    <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)}
+                    aria-disabled={armed ? undefined : true} className={buttonStyles({ size: "sm" })}>
                       <Icon aria-hidden className="size-3.5 text-signal-400" />
                       {option.label}
                     </button>
                   );
                 })}
                 {navOptions.map((option) => (
-                  <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)} className={buttonStyles({ size: "sm" })}>
+                  <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)}
+                    aria-disabled={armed ? undefined : true} className={buttonStyles({ size: "sm" })}>
                     {option.kind === "back" ? (
                       <Undo2 aria-hidden className="size-3.5" />
                     ) : option.kind === "correct" ? (
@@ -408,6 +425,9 @@ export function Troubleshooter() {
                   if (inputError) setInputError(null);
                 }}
                 onKeyDown={onKeyDown}
+                // Browsers don't scroll a PARTLY visible field on focus; show the whole
+                // reply box (minimal scroll). Not a message scroll — those have one owner.
+                onFocus={() => formRef.current?.scrollIntoView?.({ block: "nearest" })}
                 placeholder="Describe the problem…"
                 aria-invalid={inputError ? true : undefined}
                 aria-describedby={inputError ? "troubleshooter-input-error" : undefined}

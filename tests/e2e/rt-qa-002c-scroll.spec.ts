@@ -107,7 +107,10 @@ for (const motion of ["reduce", "no-preference"] as const) {
        */
       const checkLayout = async (when: string) => {
         const { fits, replyTopVisible } = await replyLayout(page);
-        expect(replyTopVisible, `start of the new reply visible ${when}`).toBe(true);
+        const composerFocused = await input.evaluate((el) => el === document.activeElement);
+        // RT-002D-R1: a focused reply box is never scrolled out of view (WCAG 2.4.11).
+        if (composerFocused) expect(await fullyVisible(input), `focused reply box visible ${when}`).toBe(true);
+        else expect(replyTopVisible, `start of the new reply visible ${when}`).toBe(true);
         expect(await newestMessageVisible(page), `newest message visible ${when}`).toBe(true);
         if (fits) {
           expect(await fullyVisible(input), `reply box visible ${when}`).toBe(true);

@@ -19,7 +19,7 @@ import { renderWithProviders } from "./render";
 function sampleEvents(): SessionEvent[] {
   return [
     { input: { type: "text", text: "The green thing isn't working" }, selectedEquipmentId: null },
-    { input: { type: "option", optionId: "confirm:yes" }, selectedEquipmentId: null },
+    { input: { type: "option", optionId: "confirm:yes", instanceId: 1 }, selectedEquipmentId: null },
   ];
 }
 
@@ -81,7 +81,7 @@ describe("session storage", () => {
 
   describe("rejects tampered inputs", () => {
     const text = (t: string) => ({ input: { type: "text", text: t }, selectedEquipmentId: null });
-    const option = (id: string) => ({ input: { type: "option", optionId: id }, selectedEquipmentId: null });
+    const option = (id: string, instanceId = 1) => ({ input: { type: "option", optionId: id, instanceId }, selectedEquipmentId: null });
     it.each<[string, unknown]>([
       ["a button that was never on screen (skipping to an urgent answer)", [text("The green thing isn't working"), option("opt:no-silent")]],
       ["a button for a later question", [option("confirm:yes")]],
@@ -140,7 +140,7 @@ describe("session restore in the app", () => {
   });
 
   it("does not restore invalid data, does not crash, and says it was cleared", async () => {
-    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt: Date.now(), events: [{ input: { type: "option", optionId: "opt:no-silent" }, selectedEquipmentId: null }] }));
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify({ version: SESSION_VERSION, engineVersion: ENGINE_VERSION, lastActivityAt: Date.now(), events: [{ input: { type: "option", optionId: "opt:no-silent", instanceId: 0 }, selectedEquipmentId: null }] }));
     renderWithProviders(<Troubleshooter />);
     await waitFor(() => expect(window.sessionStorage.getItem(SESSION_KEY)).toBeNull());
     expect(screen.queryByText(/has been restored/)).not.toBeInTheDocument();

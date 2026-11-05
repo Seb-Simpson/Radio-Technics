@@ -15,7 +15,7 @@ function say(state: ConversationState, text: string, context = noSelection) {
 function choose(state: ConversationState, label: string) {
   const option = describeStep(state).options.find((o) => o.label === label);
   if (!option) throw new Error(`No option "${label}". Options: ${describeStep(state).options.map((o) => o.label).join(", ")}`);
-  return respond(state, { type: "option", optionId: option.id }, noSelection);
+  return respond(state, { type: "option", optionId: option.id, instanceId: state.instance }, noSelection);
 }
 
 const lastAssistant = (state: ConversationState) => [...state.messages].reverse().find((m) => m.role === "assistant")?.text;
@@ -63,7 +63,7 @@ describe("scenario 1 — vague description", () => {
     // Identify by text… (RT-002D: identity from typed words is confirmed first)
     const byText = say(state, "the mixing desk");
     expect(byText.state.step).toEqual({ kind: "confirm", equipmentId: "mixing-console" });
-    const confirmed = respond(byText.state, { type: "option", optionId: "confirm:yes" }, noSelection);
+    const confirmed = respond(byText.state, { type: "option", optionId: "confirm:yes", instanceId: byText.state.instance }, noSelection);
     expect(confirmed.state.step).toEqual({ kind: "node", nodeId: "generic-symptom" });
     expect(lastAssistant(confirmed.state)).toBe("What's happening with the mixing console?");
 
@@ -87,7 +87,9 @@ describe("scenario 2 — green button selected in the Studio Explorer", () => {
     expect(lastAssistant(state)).toBe("Are you referring to the green button that advances Myriad to the next song?");
 
     let commands;
-    ({ state, commands } = say(state, "yes"));
+    // RT-002D-R1: a typed "yes" is never recorded; the presenter presses the answer.
+    expect(say(state, "yes").state.answers).toEqual(state.answers);
+    ({ state, commands } = choose(state, "Yes, that's it"));
     expect(lastAssistant(state)).toBe("What happened on the Myriad screen after you pressed the green button?");
     expect(commands).toContainEqual({ type: "select_equipment", equipmentId: "green-next-button" });
 
@@ -178,10 +180,11 @@ describe("universal responses", () => {
 describe("safety and robustness", () => {
   it("rejects unknown equipment from the explorer without changing step", () => {
     const start = createConversation();
-    const { state, commands } = respond(start, { type: "equipment", equipmentId: "toaster" }, noSelection);
-    expect(state.step).toEqual(start.step);
+    // RT-002D-R1: refused inputs change nothing (not even a notice) and are never saved.
+    const { state, commands, rejected } = respond(start, { type: "equipment", equipmentId: "toaster" }, noSelection);
+    expect(state).toBe(start);
     expect(commands).toEqual([]);
-    expect(state.messages.at(-1)?.role).toBe("notice");
+    expect(rejected).toMatch(/isn't in the studio's equipment list/);
   });
 
   it("asks for clarification for unknown equipment descriptions", () => {
@@ -200,8 +203,13 @@ describe("safety and robustness", () => {
 
   it("handles stale option IDs and empty input", () => {
     const start = createConversation();
-    expect(respond(start, { type: "option", optionId: "opt:does-not-exist" }, noSelection).state.step).toEqual(start.step);
-    expect(say(start, "   ").state.messages.at(-1)?.role).toBe("notice");
+    // RT-002D-R1: refused, state unchanged, with a reason for the UI.
+    const stale = respond(start, { type: "option", optionId: "opt:does-not-exist", instanceId: start.instance }, noSelection);
+    expect(stale.state).toBe(start);
+    expect(stale.rejected).toBeTruthy();
+    const empty = say(start, "   ");
+    expect(empty.state).toBe(start);
+    expect(empty.rejected).toMatch(/Please type a description/);
   });
 
   it("routes cable reports to a caution-first question", () => {
@@ -260,7 +268,7 @@ describe("no dead ends", () => {
       }
       for (const option of view.options) {
         if (option.kind === "restart" || option.id === "u-show") continue;
-        queue.push(respond(state, { type: "option", optionId: option.id }, noSelection).state);
+        queue.push(respond(state, { type: "option", optionId: option.id, instanceId: state.instance }, noSelection).state);
       }
     }
     // All static nodes are reachable.

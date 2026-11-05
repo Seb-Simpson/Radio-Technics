@@ -10,16 +10,15 @@
  */
 import { describe, expect, it } from "vitest";
 import { flowNodes } from "@/data/troubleshooting-flows";
-import { containsOperationalInstruction, guardModelProposal } from "@/lib/ai/contracts";
+import { CLARIFICATION_QUESTIONS, FALLBACK_REPLIES, ARTICLES_INTRO, guardModelProposal } from "@/lib/ai/contracts";
 import { ENGINE_VERSION, loadSession, replayEvents, SESSION_KEY, SESSION_VERSION, type SessionEvent } from "@/lib/session/storage";
-import { claimValue, extractClaims } from "@/lib/troubleshooter/claims";
 import { buildSupportSummary, createConversation, describeStep, respond } from "@/lib/troubleshooter/engine";
 import { classifyBroadcast } from "@/lib/troubleshooter/safety";
 import type { AnsweredQuestion, ConversationState, FlowOption, UserInput } from "@/lib/troubleshooter/types";
 
 const ctx = { selectedEquipmentId: null };
 const type = (s: ConversationState, text: string) => respond(s, { type: "text", text }, ctx).state;
-const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId }, ctx).state;
+const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId, instanceId: s.instance }, ctx).state;
 const at = (s: ConversationState) => (s.step.kind === "node" || s.step.kind === "check" ? s.step.nodeId : s.step.kind);
 const nodesById = new Map(flowNodes.map((n) => [n.id, n]));
 
@@ -51,7 +50,7 @@ describe("RT-QA-002C exact reproductions", () => {
     if (s0.step.kind === "node" && s0.step.nodeId.endsWith("meters")) {
       // Interpreted, not recorded: the presenter is asked to confirm.
       expect(newAnswers(s0, s)).toEqual([]);
-      expect(describeStep(s).prompt).toBe("It sounds like the level meters aren't moving. Is that correct?");
+      expect(describeStep(s).prompt).toBe("It sounds like the level meters aren't moving. Is that correct? Choose the answer that matches.");
       expect(describeStep(s).options.map((o) => o.label).slice(0, 2)).toEqual(["No, they don't move", "Yes, they move"]);
       expect(describeStep(s).options.map((o) => o.label)).toContain("I'm not sure");
       expect(press(s, "opt:still").answers.at(-1)).toMatchObject({ answer: "No, they don't move", source: "confirmed-interpretation", typedText: "The meters have stopped moving." });
@@ -62,7 +61,6 @@ describe("RT-QA-002C exact reproductions", () => {
     const s0 = make();
     const s = type(s0, "It plays neither music nor speech.");
     for (const a of newAnswers(s0, s)) expect(optionFor(a)?.audio).not.toBe("present");
-    expect(claimValue(extractClaims("It plays neither music nor speech."), "sound")).toBe(false);
     if (at(s0) === "gb-current-song") {
       expect(newAnswers(s0, s)).toEqual([]);
       expect(describeStep(s).options[0]?.label).toBe("No — there's silence");
@@ -103,11 +101,12 @@ describe("RT-QA-002C exact reproductions", () => {
     expect(s.messages.some((m) => /correcting which equipment/.test(m.text))).toBe(true);
   });
 
-  it("“No, that's not the one I meant.” while confirming equipment is a plain 'no' to that identity question", () => {
+  it("“No, that's not the one I meant.” while confirming equipment records nothing until the presenter presses 'No' (RT-002D-R1)", () => {
     const s0 = atConfirmGreen();
     const s = type(s0, "No, that's not the one I meant.");
-    expect(newAnswers(s0, s).map((a) => a.answer)).toEqual(["No, something else"]);
+    expect(newAnswers(s0, s)).toEqual([]);
     expect(s.urgent).toBe(false);
+    expect(newAnswers(s0, press(s, "confirm:no")).map((a) => a.answer)).toEqual(["No, something else"]);
   });
 
   it.each([
@@ -146,7 +145,7 @@ describe("RT-QA-002C exact reproductions", () => {
       const s = type(s0, text);
       expect(s.confirmedOffAir, name).toBe(false);
       expect(s.urgent, name).toBe(s0.urgent);
-      expect(s.broadcastReports.at(-1), name).toEqual({ status, text });
+      expect(s.incident.entries.at(-1), name).toMatchObject({ kind: status, evidence: text });
     }
   });
 
@@ -268,22 +267,6 @@ function randomText(r: () => number): string {
   return `${lead ? `${lead}, ` : ""}${body}${extra}${pick(r, FRAGMENTS.form)}`.trim();
 }
 
-/** Invariant 1: a recorded answer derived from typed words never contradicts what those words say. */
-function checkAnswerConsistency(a: AnsweredQuestion) {
-  if (!a.typedText || a.source === "button") return;
-  const option = optionFor(a);
-  if (!option) return;
-  const reading = extractClaims(a.typedText);
-  if (option.audio) {
-    const sound = claimValue(reading, "sound");
-    if (sound !== null) expect(sound, `"${a.typedText}" → ${a.answer}`).toBe(option.audio === "present");
-  }
-  if (option.asserts) {
-    const value = claimValue(reading, option.asserts.subject);
-    if (value !== null) expect(value, `"${a.typedText}" → ${a.answer}`).toBe(option.asserts.value);
-  }
-}
-
 describe("model-based invariants (seeded random conversations)", () => {
   it("hold after every step of 400 random conversations", () => {
     for (let seed = 1; seed <= 400; seed++) {
@@ -300,30 +283,29 @@ describe("model-based invariants (seeded random conversations)", () => {
         else {
           const options = describeStep(s).options.filter((o) => o.id !== "restart");
           if (options.length === 0) break;
-          input = { type: "option", optionId: pick(r, options).id };
+          input = { type: "option", optionId: pick(r, options).id, instanceId: s.instance };
         }
         s = respond(s, input, ctx).state;
         if (input.type === "text") history.push(input.text);
         const label = `seed ${seed} step ${step}: ${JSON.stringify(input)}`;
 
-        for (const a of newAnswers(before, s)) {
-          // 1. never contradicts the typed words it came from
-          checkAnswerConsistency(a);
-          // Typed safety answers are only recorded via confirmation, a bare reply or an exact label.
-          const option = optionFor(a);
-          if (a.source === "typed" && option && (option.audio || option.asserts?.subject === "movement") && input.type === "text") {
-            const lower = input.text.toLowerCase().replace(/[.!?]+$/, "");
-            expect(lower === option.label.toLowerCase() || /^(yes|no|yeah|nope|yep|nah)[.!?]*$/i.test(input.text.trim()), `${label} recorded "${a.answer}" from free text`).toBe(true);
-          }
-          // 2. an identity correction never creates a playback fact
-          if (input.type === "text" && /not the one i meant|wrong one|not the green button|i meant the/i.test(input.text) && a.questionId === "gb-current-song") {
-            throw new Error(`${label}: identity correction recorded a playback answer`);
+        // 1. RT-002D-R1: an answer only ever comes from pressing an option that was
+        //    displayed on THIS question instance, with exactly that option's label.
+        //    (Structural check — no parser is used to decide what was "meant".)
+        const added = newAnswers(before, s);
+        if (input.type !== "option") {
+          expect(added, `${label} recorded an answer from typed text`).toEqual([]);
+        } else {
+          const shown = describeStep(before);
+          for (const a of added.filter((x) => x.questionId !== "studio-explorer" && x.questionId !== "topic")) {
+            expect(a.instanceId, label).toBe(before.instance);
+            const displayed = shown.options.find((o) => o.id === a.optionId);
+            expect(displayed?.label, label).toBe(a.answer);
           }
         }
-        // 3. history/hypothetical/denial alone never confirms an outage
-        if (history.every((t) => !["current-confirmed"].includes(classifyBroadcast(t).status)) && !s.answers.some((a) => a.questionId === "hear-on-air")) {
-          expect(s.confirmedOffAir, label).toBe(false);
-        }
+        // 3. Hand-labelled vocabulary: no random fragment states a CURRENT outage,
+        //    so a confirmed outage must never appear.
+        expect(s.confirmedOffAir, label).toBe(false);
         // 4. urgency never goes away
         if (before.urgent) expect(s.urgent, `${label} cleared urgency`).toBe(true);
         if (before.confirmedOffAir) expect(s.confirmedOffAir, label).toBe(true);
@@ -347,8 +329,11 @@ describe("model-based invariants (seeded random conversations)", () => {
       let s = createConversation();
       for (let i = 0; i < 6; i++) {
         const options = describeStep(s).options.filter((o) => o.id !== "restart");
-        const input: UserInput = r() < 0.5 || options.length === 0 ? { type: "text", text: randomText(r) } : { type: "option", optionId: pick(r, options).id };
-        s = respond(s, input, ctx).state;
+        const input: UserInput = r() < 0.5 || options.length === 0 ? { type: "text", text: randomText(r) } : { type: "option", optionId: pick(r, options).id, instanceId: s.instance };
+        const result = respond(s, input, ctx);
+        // Like the app: only accepted inputs are saved.
+        if (result.rejected) continue;
+        s = result.state;
         events.push({ input, selectedEquipmentId: null });
       }
       // …then corrupt it.
@@ -358,7 +343,7 @@ describe("model-based invariants (seeded random conversations)", () => {
       const target = list[Math.floor(r() * list.length)] as { input: Record<string, unknown> };
       if (mutation === 0) target.input.optionId = pick(r, ["opt:no-silent", "opt:still", "confirm:yes", "opt:yes"]);
       if (mutation === 1) target.input.type = "option";
-      if (mutation === 2) list.splice(Math.floor(r() * list.length), 0, { input: { type: "option", optionId: "opt:no-silent" }, selectedEquipmentId: null });
+      if (mutation === 2) list.splice(Math.floor(r() * list.length), 0, { input: { type: "option", optionId: "opt:no-silent", instanceId: 2 }, selectedEquipmentId: null });
       if (mutation === 3) payload.conversation = { urgent: true, confirmedOffAir: true, answers: [{ answer: "No — there's silence" }] };
       if (mutation === 4) list.reverse();
       if (mutation === 5) (target as Record<string, unknown>).answer = "Yes, they move";
@@ -371,31 +356,33 @@ describe("model-based invariants (seeded random conversations)", () => {
       expect(result.session.conversation).toEqual(replayEvents(result.session.events));
       // …so every answer is backed by a real input.
       const texts = result.session.events.flatMap((e) => (e.input.type === "text" ? [e.input.text] : []));
+      const presses = result.session.events.flatMap((e) => (e.input.type === "option" ? [`${e.input.instanceId}:${e.input.optionId}`] : []));
       for (const a of result.session.conversation.answers) {
         if (a.typedText) expect(texts, `seed ${seed}`).toContain(a.typedText);
-        checkAnswerConsistency(a);
+        // Every answer is backed by a stored press of that exact option on that exact question instance.
+        if (a.questionId !== "studio-explorer" && a.questionId !== "topic") expect(presses, `seed ${seed}`).toContain(`${a.instanceId}:${a.optionId}`);
       }
     }
   });
 
-  it("6. no generated instruction passes the AI guard, however it is disguised (500 cases)", () => {
-    const verbs = ["restart", "reboot", "unplug", "power cycle", "switch off", "turn off", "press", "reset", "disconnect", "re-route"];
-    const objects = ["Myriad", "the rack", "the desk", "the PC", "the transmitter link", "the green button"];
-    const frames = ["{v} {o}.", "Try to {v} {o}.", "It may help to {v} {o}.", "You could {v} {o}, that usually works.", "I'd {v} {o} if I were you.", "First, {v} {o}."];
-    const disguise = [
-      (t: string) => t,
-      (t: string) => t.toUpperCase(),
-      (t: string) => t.replace(/([a-z])/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0xfee0)), // fullwidth
-      (t: string) => t.replace(/([aeo])/g, "$1​"), // zero-width
-      (t: string) => t.replace(/e/g, "е"), // Cyrillic e
-    ];
+  it("6. no model-written words ever reach the presenter, whatever the proposal contains (500 cases)", () => {
+    // RT-002D-R1: model output is identifiers only. Random proposals stuffed with
+    // operational prose in every field must render only trusted local text.
+    const prose = ["Restart Myriad.", "Have you tried giving the power lead a firm reseat?", "Hold the top-left key for five seconds", "Swap the XLR into channel 2", "Ｒｅｓｔａｒｔ", "Would a quick power-cycle help?"];
+    const kinds = ["clarification", "articles", "procedure", "fallback", "clarifying_question", "text", "constructor", "toString", "__proto__"];
+    const keys = ["text", "questionId", "articleIds", "procedureId", "procedureVersion", "fallbackId", "steps", "reply", "commands", "safe"];
+    const trusted = new Set<string>([...CLARIFICATION_QUESTIONS.values(), ...FALLBACK_REPLIES.values(), ARTICLES_INTRO]);
     const req = { message: "x", selectedEquipmentId: null, retrieved: { articles: [], interpretations: [] } };
     for (let seed = 1; seed <= 500; seed++) {
       const r = rng(seed * 104729);
-      const text = pick(r, disguise)(pick(r, frames).replace("{v}", pick(r, verbs)).replace("{o}", pick(r, objects)));
-      expect(containsOperationalInstruction(text), text).toBe(true);
-      const out = guardModelProposal({ kind: "clarifying_question", text: `${text}?` }, req, { urgent: false, fixedReply: null });
-      expect(out.text, text).not.toContain(text);
+      const raw: Record<string, unknown> = JSON.parse(JSON.stringify({ kind: pick(r, kinds) }));
+      for (let i = 0; i < 1 + Math.floor(r() * 3); i++) {
+        const k = pick(r, keys);
+        raw[k] = k === "articleIds" || k === "steps" || k === "commands" ? [pick(r, prose)] : pick(r, prose);
+      }
+      const out = guardModelProposal(raw, req, { urgent: false, fixedReply: null });
+      expect(trusted.has(out.text), JSON.stringify(raw)).toBe(true);
+      expect(out.procedure).toBeNull();
     }
   });
 });

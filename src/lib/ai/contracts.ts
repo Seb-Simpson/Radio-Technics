@@ -1,35 +1,33 @@
 /**
- * RT-004 AI contract (not yet connected to any model). Redesigned in RT-002D.
+ * RT-004 AI contract (not yet connected to any model). Redesigned in RT-002D-R1.
  *
- * A future language model may only PROPOSE one of three things:
- *   - a clarifying question,
- *   - a suggestion of articles the local retriever already found,
- *   - a reference to an ENGINEER-APPROVED procedure by its ID.
- * Everything it returns is untrusted. The model can never authorise its own
- * output: there is no "this is safe" flag, and any field it adds that isn't
- * in the schema rejects the whole proposal.
+ * RT-QA-002D showed that filtering model-written prose for operational
+ * instructions cannot be made reliable (37 of 42 new instruction texts got
+ * past a word list). So model prose is gone from the trusted output channel:
+ * a model may only return IDENTIFIERS, and every word the presenter sees is
+ * rendered from local templates or approved knowledge-base content.
  *
- *   1. `preModelSafety` runs BEFORE any model call: current or possible
- *      broadcast interruptions, restart/unplug questions and requests for a
- *      person are answered from fixed text, without waiting on a model.
- *   2. `guardModelProposal` runs AFTER the call, on the server:
- *      - strict schema; unknown keys or kinds → rejected;
- *      - model text is normalised (Unicode compatibility forms, invisible
- *        characters, spaced-out letters) and rejected if it contains anything
- *        that tells the presenter to operate equipment — whatever it claims;
- *      - procedure steps are NEVER model text: they are rendered from the
- *        knowledge base, and only for an article that trusted application data
- *        says is an approved procedure, verified, with a review record and
- *        every section verified;
- *      - articles must be ones retrieved for this request; commands must pass
- *        `validateWorkspaceCommands`.
+ * A model may propose exactly one of:
+ *   { kind: "clarification", questionId }       → a locally defined question
+ *   { kind: "articles", articleIds }            → retrieved knowledge articles
+ *   { kind: "procedure", procedureId, procedureVersion }
+ *                                               → an engineer-approved procedure
+ *   { kind: "fallback", fallbackId }            → a locally defined safe reply
+ * (`clarification` and `articles` may also carry workspace `commands`.)
  *
- * Credentials for any provider stay server-side (a route handler reading an
- * environment variable); nothing here makes a network call.
+ * Anything else — an unknown kind, an unknown or inherited key, a wrong type,
+ * a non-plain object — is rejected before any type-specific field is read.
+ * Procedures must be approved, verified, reviewed with a valid record,
+ * applicable to the selected equipment, part of this request's retrieval and
+ * at the exact version proposed. None exist yet, so every procedure fails.
+ *
+ * `preModelSafety` still runs before any model call. Credentials for any
+ * provider stay server-side; nothing here makes a network call.
  */
+import { validateReview } from "@/lib/content/validate";
 import { getArticleById } from "@/lib/knowledge/search";
 import type { SearchResponse } from "@/lib/knowledge/search-engine";
-import { PROCEDURE_REPLY } from "@/lib/troubleshooter/engine";
+import { MAX_INPUT_LENGTH, PROCEDURE_REPLY } from "@/lib/troubleshooter/engine";
 import { isCurrentConcern } from "@/lib/troubleshooter/safety";
 import { understand } from "@/lib/troubleshooter/understand";
 import { validateWorkspaceCommands, type WorkspaceCommand } from "@/lib/workspace/commands";
@@ -38,9 +36,25 @@ import type { KnowledgeArticle } from "@/types";
 export const URGENT_REPLY =
   "If listeners may be hearing silence, treat it as urgent: contact technical support now. I'll keep a note of what you've told me for them.";
 export const SUPPORT_REPLY = "Please contact the station's technical support and read them the summary of this conversation.";
-export const ARTICLE_FALLBACK_TEXT = "These articles may help explain what you're seeing. They are information only, not instructions.";
-export const QUESTION_FALLBACK_TEXT = "Can you tell me a bit more about what you can see or hear?";
-const MAX_TEXT = 600;
+export const TOO_LONG_REPLY = "That message is too long to use. Please shorten it. If the station is off air, use the “We're off air” button.";
+
+/** Trusted, locally written clarifying questions. A model can only pick one by ID. */
+export const CLARIFICATION_QUESTIONS: ReadonlyMap<string, string> = new Map([
+  ["what-do-you-see", "What can you see on the screen right now?"],
+  ["which-equipment", "Which piece of equipment is this about?"],
+  ["listeners-or-studio", "Is the sound missing for listeners, or only in the studio (headphones or speakers)?"],
+  ["since-when", "When did you first notice the problem?"],
+  ["what-changed", "Did anything change just before the problem started?"],
+]);
+
+/** Trusted, locally written safe replies. */
+export const FALLBACK_REPLIES: ReadonlyMap<string, string> = new Map([
+  ["safe-default", PROCEDURE_REPLY],
+  ["contact-support", SUPPORT_REPLY],
+  ["no-approved-procedure", "There's no engineer-approved procedure for this yet. Please contact technical support and read them the summary."],
+]);
+export const ARTICLES_INTRO = "These articles may help explain what you're seeing. They are information only, not instructions.";
+const MAX_ARTICLES = 5;
 
 /** What a server route would send to a model. Built only from local, validated data. */
 export interface AssistantRequest {
@@ -52,15 +66,17 @@ export interface AssistantRequest {
 
 /** The ONLY shapes a model may return. Treated as untrusted input. */
 export type ModelProposal =
-  | { kind: "clarifying_question"; text: string; commands?: unknown[] }
-  | { kind: "article_suggestion"; text: string; articleIds: string[]; commands?: unknown[] }
-  | { kind: "approved_procedure"; procedureId: string; commands?: unknown[] };
+  | { kind: "clarification"; questionId: string; commands?: unknown[] }
+  | { kind: "articles"; articleIds: string[]; commands?: unknown[] }
+  | { kind: "procedure"; procedureId: string; procedureVersion: string }
+  | { kind: "fallback"; fallbackId: string };
 
-const ALLOWED_KEYS: Record<ModelProposal["kind"], readonly string[]> = {
-  clarifying_question: ["kind", "text", "commands"],
-  article_suggestion: ["kind", "text", "articleIds", "commands"],
-  approved_procedure: ["kind", "procedureId", "commands"],
-};
+const SCHEMAS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["clarification", ["kind", "questionId", "commands"]],
+  ["articles", ["kind", "articleIds", "commands"]],
+  ["procedure", ["kind", "procedureId", "procedureVersion"]],
+  ["fallback", ["kind", "fallbackId"]],
+]);
 
 export interface PreModelDecision {
   urgent: boolean;
@@ -69,6 +85,7 @@ export interface PreModelDecision {
 }
 
 export function preModelSafety(text: string): PreModelDecision {
+  if (text.length > MAX_INPUT_LENGTH) return { urgent: false, fixedReply: TOO_LONG_REPLY };
   const u = understand(text);
   if (isCurrentConcern(u.broadcast.status) || u.signals.includes("silence")) return { urgent: true, fixedReply: URGENT_REPLY };
   if (u.procedureQuestion) return { urgent: false, fixedReply: PROCEDURE_REPLY };
@@ -78,18 +95,20 @@ export function preModelSafety(text: string): PreModelDecision {
 
 export interface RenderedProcedure {
   id: string;
+  version: string;
   title: string;
   /** Rendered from the knowledge base, never from model output. */
   sections: { heading: string; body: string[] }[];
 }
 
 export interface GuardedReply {
-  kind: "fixed" | "clarifying_question" | "article_suggestion" | "approved_procedure";
+  kind: "fixed" | "clarification" | "articles" | "procedure" | "fallback";
+  /** Always trusted local text (a template, an article title, or a fixed reply). */
   text: string;
   articles: KnowledgeArticle[];
   procedure: RenderedProcedure | null;
   commands: WorkspaceCommand[];
-  /** Everything removed or replaced, for logging and engineer review. */
+  /** Why anything was refused, for logging and engineer review. */
   rejected: string[];
 }
 
@@ -97,130 +116,144 @@ export interface GuardedReply {
 export type ArticleLookup = (id: string) => KnowledgeArticle | undefined;
 
 /* ------------------------------------------------------------------ */
-/* Instruction detection                                               */
+/* Strict parsing                                                      */
 /* ------------------------------------------------------------------ */
 
-const ZERO_WIDTH = /[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯︀-️﻿]/g;
-/** Common look-alike letters from other scripts. */
-const CONFUSABLES: Record<string, string> = { а: "a", е: "e", о: "o", р: "p", с: "c", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", ɡ: "g", һ: "h", ⅼ: "l", ｒ: "r" };
+const hasOwn = (o: object, key: string) => Object.prototype.hasOwnProperty.call(o, key);
 
-/** Fold text so disguised words can be recognised: "Ｒｅ​s t a r t" → "restart". */
-export function foldForDetection(text: string): string {
-  let t = text.normalize("NFKC").replace(ZERO_WIDTH, "").toLowerCase();
-  t = [...t].map((ch) => CONFUSABLES[ch] ?? ch).join("");
-  // Join letters spelled out with spaces, dots or dashes: "r e s t a r t", "r.e.s.t.a.r.t".
-  // Also a fragment followed by spaced letters: "res t a r t".
-  t = t.replace(/\b([a-z]+)((?:[\s.\-_*][a-z]\b){2,})/g, (_run, head: string, tail: string) => head + tail.replace(/[\s.\-_*]/g, ""));
-  return t.replace(/[^a-z0-9\s']/g, " ").replace(/\s+/g, " ").trim();
+/** A plain JSON object: no arrays, class instances or exotic prototypes. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
-/**
- * Words that operate studio equipment or change the broadcast. Model text may
- * not contain them at all — not as a suggestion, a hedge ("it may help to…")
- * or an explanation. Approved steps come from the knowledge base instead.
- */
-const OPERATIONAL = new RegExp(
-  "\\b(" +
-    [
-      "restart\\w*", "reboot\\w*", "reset\\w*", "power(ed|ing)? (it )?(off|on|down|up|cycle)", "power ?cycl\\w*", "shut\\w* (it )?down",
-      "turn\\w* (it |them |the \\w+ )?(off|on|up|down)", "switch\\w* (it |them |the \\w+ )?(off|on|over)", "unplug\\w*", "re ?plug\\w*", "plug\\w* (it |them )?(in|back)",
-      "disconnect\\w*", "reconnect\\w*", "pull\\w* (out|the)", "press\\w*", "push\\w*", "hold\\w* (down|the)", "hit\\w* (the|it)", "click\\w*", "tap\\w*",
-      "toggle\\w*", "flip\\w*", "re ?rout\\w*", "rout(e|ing) (the|it|audio)", "patch\\w*", "fader\\w*", "slide\\w* (up|down)", "adjust\\w*", "change\\w* (the )?(routing|source|input|output|setting)",
-      "swap\\w*", "replace\\w*", "reinstall\\w*", "uninstall\\w*", "force quit", "end task", "kill\\w*", "log\\w* (out|off)", "sign\\w* out", "open\\w* the (rack|cabinet)",
-      "go to (the )?settings", "set (it|the \\w+) to", "move\\w* the (fader|slider|knob)", "rotate\\w*", "twist\\w*", "jiggle\\w*",
-    ].join("|") +
-    ")\\b",
-);
+const isId = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(v);
 
-export function containsOperationalInstruction(text: string): boolean {
-  return OPERATIONAL.test(foldForDetection(text));
+/** Parse untrusted model output into a ModelProposal, or explain why not. Never throws. */
+export function parseProposal(raw: unknown): { ok: true; proposal: ModelProposal } | { ok: false; reason: string } {
+  try {
+    if (!isPlainObject(raw)) return { ok: false, reason: "not a plain object" };
+    if (!hasOwn(raw, "kind") || typeof raw.kind !== "string") return { ok: false, reason: "missing kind" };
+    const allowed = SCHEMAS.get(raw.kind);
+    if (!allowed) return { ok: false, reason: `unknown kind: ${raw.kind.slice(0, 40)}` };
+    const keys = Reflect.ownKeys(raw);
+    const unexpected = keys.filter((k) => typeof k !== "string" || !allowed.includes(k));
+    if (unexpected.length > 0) return { ok: false, reason: `unexpected fields: ${unexpected.map(String).join(", ").slice(0, 120)}` };
+    if (hasOwn(raw, "commands") && !Array.isArray(raw.commands)) return { ok: false, reason: "commands must be a list" };
+    switch (raw.kind) {
+      case "clarification":
+        return isId(raw.questionId) ? { ok: true, proposal: { kind: "clarification", questionId: raw.questionId, commands: raw.commands as unknown[] | undefined } } : { ok: false, reason: "bad questionId" };
+      case "articles": {
+        const ids = raw.articleIds;
+        if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_ARTICLES || !ids.every(isId)) return { ok: false, reason: "bad articleIds" };
+        return { ok: true, proposal: { kind: "articles", articleIds: [...ids] as string[], commands: raw.commands as unknown[] | undefined } };
+      }
+      case "procedure":
+        return isId(raw.procedureId) && typeof raw.procedureVersion === "string" && raw.procedureVersion.length <= 40
+          ? { ok: true, proposal: { kind: "procedure", procedureId: raw.procedureId, procedureVersion: raw.procedureVersion } }
+          : { ok: false, reason: "bad procedure reference" };
+      case "fallback":
+        return isId(raw.fallbackId) ? { ok: true, proposal: { kind: "fallback", fallbackId: raw.fallbackId } } : { ok: false, reason: "bad fallbackId" };
+      default:
+        return { ok: false, reason: "unknown kind" };
+    }
+  } catch {
+    // Getters, proxies or anything else exotic.
+    return { ok: false, reason: "unreadable proposal" };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Approved procedures — trusted application data only                 */
+/* ------------------------------------------------------------------ */
+
+/** The version a procedure proposal must name: revision count + latest revision date. */
+export function procedureVersion(article: KnowledgeArticle): string {
+  const last = article.revisions[article.revisions.length - 1];
+  return `${article.revisions.length}:${last?.date ?? "none"}`;
+}
+
+/** Why an article cannot be used as an approved procedure for this request ([] = usable). */
+export function procedureProblems(article: KnowledgeArticle | undefined, request: AssistantRequest, version: string, now: Date = new Date()): string[] {
+  if (!article) return ["unknown procedure"];
+  const problems: string[] = [];
+  if (article.kind !== "approved-procedure") problems.push("not an approved procedure");
+  if (article.status !== "verified") problems.push("not engineer-verified");
+  problems.push(...validateReview(article.review, now).map((e) => `approval record: ${e}`));
+  if (article.sections.length === 0) problems.push("no sections");
+  for (const section of article.sections) {
+    if (section.status !== "verified") problems.push(`section not verified: ${section.heading}`);
+    if (section.review) problems.push(...validateReview(section.review, now).map((e) => `section approval record: ${e}`));
+  }
+  if (request.selectedEquipmentId && !article.equipmentIds.includes(request.selectedEquipmentId)) problems.push("not for the selected equipment");
+  if (!request.retrieved.articles.some((a) => a.article.id === article.id)) problems.push("not retrieved for this request");
+  if (procedureVersion(article) !== version) problems.push("procedure version doesn't match");
+  return problems;
 }
 
 /* ------------------------------------------------------------------ */
 /* Guard                                                               */
 /* ------------------------------------------------------------------ */
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
-}
-
-/** Approval comes from trusted application data, never from the model. */
-export function isApprovedProcedure(article: KnowledgeArticle | undefined): article is KnowledgeArticle {
-  return Boolean(
-    article &&
-      article.kind === "approved-procedure" &&
-      article.status === "verified" &&
-      article.review &&
-      article.sections.length > 0 &&
-      article.sections.every((s) => s.status === "verified"),
-  );
-}
-
 function fixed(text: string, rejected: string[]): GuardedReply {
   return { kind: "fixed", text, articles: [], procedure: null, commands: [], rejected };
 }
 
-/**
- * Validate a model's proposal. Never throws. Anything that fails becomes the
- * safe procedure reply with no commands.
- */
-export function guardModelProposal(raw: unknown, request: AssistantRequest, pre: PreModelDecision, lookup: ArticleLookup = getArticleById): GuardedReply {
+/** Validate a model's proposal and render it from trusted content. Never throws. */
+export function guardModelProposal(
+  raw: unknown,
+  request: AssistantRequest,
+  pre: PreModelDecision,
+  lookup: ArticleLookup = getArticleById,
+  now: Date = new Date(),
+): GuardedReply {
   if (pre.fixedReply) return fixed(pre.fixedReply, ["model bypassed by safety layer"]);
-  if (!isRecord(raw) || typeof raw.kind !== "string" || !(raw.kind in ALLOWED_KEYS)) return fixed(PROCEDURE_REPLY, ["malformed proposal"]);
-  const kind = raw.kind as ModelProposal["kind"];
-  const extra = Object.keys(raw).filter((k) => !ALLOWED_KEYS[kind].includes(k));
-  // e.g. a self-declared "givesInstructions: false" or "safe: true".
-  if (extra.length > 0) return fixed(PROCEDURE_REPLY, [`unexpected fields: ${extra.join(", ")}`]);
+  const parsed = parseProposal(raw);
+  if (!parsed.ok) return fixed(PROCEDURE_REPLY, [parsed.reason]);
+  const proposal = parsed.proposal;
 
-  const rejected: string[] = [];
-  const { commands, errors } = validateWorkspaceCommands(raw.commands ?? []);
-  rejected.push(...errors);
-
-  const checkText = (fallback: string): string => {
-    const text = raw.text;
-    if (typeof text !== "string" || text.trim() === "" || text.length > MAX_TEXT) {
-      rejected.push("missing, empty or oversized text");
-      return fallback;
+  switch (proposal.kind) {
+    case "clarification": {
+      const text = CLARIFICATION_QUESTIONS.get(proposal.questionId);
+      if (!text) return fixed(PROCEDURE_REPLY, [`unknown clarification question: ${proposal.questionId}`]);
+      const { commands, errors } = validateWorkspaceCommands(proposal.commands ?? []);
+      return { kind: "clarification", text, articles: [], procedure: null, commands, rejected: errors };
     }
-    if (containsOperationalInstruction(text)) {
-      rejected.push("operational instruction in model text");
-      return fallback;
-    }
-    return text.trim();
-  };
-
-  switch (kind) {
-    case "clarifying_question": {
-      let text = checkText(QUESTION_FALLBACK_TEXT);
-      if (!text.endsWith("?")) {
-        rejected.push("clarifying question is not a question");
-        text = QUESTION_FALLBACK_TEXT;
-      }
-      return { kind, text, articles: [], procedure: null, commands, rejected };
-    }
-    case "article_suggestion": {
+    case "articles": {
       const allowed = new Set(request.retrieved.articles.map((a) => a.article.id));
+      const rejected: string[] = [];
       const articles: KnowledgeArticle[] = [];
-      for (const id of Array.isArray(raw.articleIds) ? raw.articleIds : []) {
-        const article = typeof id === "string" && allowed.has(id) ? lookup(id) : undefined;
+      for (const id of proposal.articleIds) {
+        const article = allowed.has(id) ? lookup(id) : undefined;
         if (article) articles.push(article);
-        else rejected.push(`article not retrieved or unknown: ${String(id)}`);
+        else rejected.push(`article not retrieved or unknown: ${id}`);
       }
       if (articles.length === 0) return fixed(PROCEDURE_REPLY, [...rejected, "no valid articles"]);
-      return { kind, text: checkText(ARTICLE_FALLBACK_TEXT), articles, procedure: null, commands, rejected };
+      const { commands, errors } = validateWorkspaceCommands(proposal.commands ?? []);
+      return { kind: "articles", text: ARTICLES_INTRO, articles, procedure: null, commands, rejected: [...rejected, ...errors] };
     }
-    case "approved_procedure": {
-      const id = raw.procedureId;
-      const article = typeof id === "string" ? lookup(id) : undefined;
-      if (!isApprovedProcedure(article)) {
-        return fixed(PROCEDURE_REPLY, [...rejected, `not an engineer-approved procedure: ${String(id)}`]);
-      }
-      const procedure: RenderedProcedure = {
-        id: article.id,
-        title: article.title,
-        sections: article.sections.map((s) => ({ heading: s.heading, body: [...s.body] })),
+    case "procedure": {
+      const article = lookup(proposal.procedureId);
+      const problems = procedureProblems(article, request, proposal.procedureVersion, now);
+      if (problems.length > 0 || !article) return fixed(FALLBACK_REPLIES.get("no-approved-procedure")!, problems);
+      return {
+        kind: "procedure",
+        text: article.title,
+        articles: [article],
+        procedure: {
+          id: article.id,
+          version: procedureVersion(article),
+          title: article.title,
+          sections: article.sections.map((s) => ({ heading: s.heading, body: [...s.body] })),
+        },
+        commands: [],
+        rejected: [],
       };
-      return { kind, text: article.title, articles: [article], procedure, commands, rejected };
+    }
+    case "fallback": {
+      const text = FALLBACK_REPLIES.get(proposal.fallbackId);
+      return text ? { kind: "fallback", text, articles: [], procedure: null, commands: [], rejected: [] } : fixed(PROCEDURE_REPLY, [`unknown fallback: ${proposal.fallbackId}`]);
     }
   }
 }

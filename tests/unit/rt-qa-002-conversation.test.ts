@@ -11,7 +11,7 @@ import { understand } from "@/lib/troubleshooter/understand";
 
 const ctx = { selectedEquipmentId: null };
 const type = (s: ConversationState, text: string) => respond(s, { type: "text", text }, ctx).state;
-const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId }, ctx).state;
+const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId, instanceId: s.instance }, ctx).state;
 const at = (s: ConversationState) => (s.step.kind === "node" ? s.step.nodeId : s.step.kind);
 const answersTo = (s: ConversationState, question: string) => s.answers.filter((a) => a.question === question);
 
@@ -115,8 +115,10 @@ describe("1. question-aware answers", () => {
 
   it("confirmation questions handle self-correction and conflict", () => {
     const start = type(createConversation(), "The green thing isn't working");
-    expect(type(start, "Yes — sorry, no, it's something else").step).toMatchObject({ kind: "choose" });
-    expect(type(start, "no, actually yes").step).toMatchObject({ kind: "node", nodeId: "gb-screen" });
+    // RT-002D-R1: typed replies never answer the identity question; only the buttons do.
+    expect(type(start, "Yes — sorry, no, it's something else").answers).toEqual(start.answers);
+    expect(type(start, "no, actually yes").answers).toEqual(start.answers);
+    expect(type(start, "no, actually yes").step).toMatchObject({ kind: "confirm" });
     const conflicted = type(start, "yes no");
     expect(conflicted.step).toEqual(start.step);
     expect(conflicted.answers).toEqual(start.answers);

@@ -183,6 +183,8 @@ export const flowNodes: FlowNode[] = [
     options: [
       { id: "yes", label: "Yes, it might be silent", next: "outcome-urgent", answer: "yes", audio: "absent", restate: "the station might be silent on air right now" },
       { id: "no", label: "No, there is sound but something is missing", next: "hear-meters", answer: "no", audio: "present", match: ["something is missing"], restate: "there is sound on air, but something is missing" },
+      // RT-002D-R1: say whether it's what listeners hear or only local monitoring.
+      { id: "studio-only", label: "No, it's only in the studio (headphones or speakers)", next: "hear-where", restate: "the problem is only in the studio, not what listeners hear" },
     ],
     unsureNext: "outcome-urgent",
   },

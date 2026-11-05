@@ -15,7 +15,7 @@ function type(state: ConversationState, text: string, context = ctx) {
 function press(state: ConversationState, label: string) {
   const option = describeStep(state).options.find((o) => o.label === label);
   if (!option) throw new Error(`No option "${label}" in ${describeStep(state).options.map((o) => o.label).join(" | ")}`);
-  return respond(state, { type: "option", optionId: option.id }, ctx).state;
+  return respond(state, { type: "option", optionId: option.id, instanceId: state.instance }, ctx).state;
 }
 const STILL_PLAYING = "Is the song that was already playing still playing?";
 const answeredStillPlaying = (s: ConversationState) => s.answers.filter((a) => a.question === STILL_PLAYING);
@@ -97,8 +97,13 @@ describe("A1 — understanding negation, uncertainty and observations", () => {
   it("uncertainty is recorded as uncertain, never as an answer", () => {
     let s = type(createConversation(), "The green thing isn't working");
     s = press(s, "Yes, that's it");
+    // RT-002D-R1: typed words never record an answer — the presenter is pointed to the button.
+    const before = s.answers.length;
     s = type(s, "no idea");
-    expect(s.answers.at(-1)).toMatchObject({ answer: "I'm not sure", certainty: "uncertain" });
+    expect(s.answers).toHaveLength(before);
+    expect(s.messages.some((m) => /choose “I'm not sure”/.test(m.text))).toBe(true);
+    s = press(s, "I'm not sure");
+    expect(s.answers.at(-1)).toMatchObject({ answer: "I'm not sure", certainty: "uncertain", source: "button" });
   });
 
   it("hedged answers are marked as not certain", () => {
@@ -113,7 +118,12 @@ describe("A1 — understanding negation, uncertainty and observations", () => {
 
   it("an explicit rejection of the equipment is respected", () => {
     let s = type(createConversation(), "The green thing isn't working");
+    // RT-002D-R1: nothing is recorded or assumed from typed words; the presenter presses the answer.
+    const before = s.answers.length;
     s = type(s, "No, that's not the green button.");
+    expect(s.answers).toHaveLength(before);
+    expect(s.equipmentId).toBeNull();
+    s = press(s, "No, something else");
     expect(s.step).toMatchObject({ kind: "choose", reason: "other" });
     expect(s.equipmentId).toBeNull();
   });
@@ -228,7 +238,11 @@ describe("A5 — silence on air", () => {
   it("possible silence asks one short question first", () => {
     const s = type(createConversation(), "everything has gone silent");
     expect(nodeId(s)).toBe("hear-on-air");
-    expect(nodeId(type(s, "yes"))).toBe("outcome-urgent");
+    // RT-002D-R1: a typed "yes" escalates at once (as possible) but is not recorded as an answer.
+    const typedYes = type(s, "yes");
+    expect(typedYes.urgent).toBe(true);
+    expect(typedYes.answers).toEqual(s.answers);
+    expect(nodeId(press(typedYes, "Yes, it might be silent"))).toBe("outcome-urgent");
   });
 
   it("the urgent outcome doesn't recommend restarting or pressing controls", () => {

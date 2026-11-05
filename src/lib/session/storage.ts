@@ -30,13 +30,14 @@ import type { ConversationState, UserInput } from "@/lib/troubleshooter/types";
 export const SESSION_KEY = "radio-technics.session";
 export const SESSION_VERSION = 4;
 /** Bump when the engine's behaviour changes, so old inputs aren't replayed into a different conversation. */
-export const ENGINE_VERSION = "rt-002d.1";
+export const ENGINE_VERSION = "rt-002d-r1.1";
 export const SESSION_MAX_IDLE_MS = 2 * 60 * 60 * 1000;
 /** Larger than any real session; anything bigger is not ours. */
 export const MAX_STORED_CHARS = 1_000_000;
 export const MAX_EVENTS = 300;
 
-const OPTION_ID = /^(opt|confirm|equip|topic|u)[:-][a-z0-9-]{1,80}$|^(back|restart)$/;
+const OPTION_ID = /^(opt|confirm|equip|topic|u|fix)[:-][a-z0-9-]{1,80}$|^(back|restart|correct)$/;
+const MAX_INSTANCE = 100_000;
 
 export interface SavedWorkspace {
   selectedEquipmentId: string | null;
@@ -103,8 +104,19 @@ export function parseEvent(raw: unknown): SessionEvent | null {
       return { input: { type: "text", text: input.text }, selectedEquipmentId: selected };
     }
     case "option": {
-      if (!hasOnlyKeys(input, ["type", "optionId"]) || typeof input.optionId !== "string" || !OPTION_ID.test(input.optionId)) return null;
-      return { input: { type: "option", optionId: input.optionId }, selectedEquipmentId: selected };
+      if (!hasOnlyKeys(input, ["type", "optionId", "instanceId"]) || typeof input.optionId !== "string" || !OPTION_ID.test(input.optionId)) return null;
+      const instanceId = input.instanceId;
+      if (typeof instanceId !== "number" || !Number.isSafeInteger(instanceId) || instanceId < 0 || instanceId > MAX_INSTANCE) return null;
+      return { input: { type: "option", optionId: input.optionId, instanceId }, selectedEquipmentId: selected };
+    }
+    case "broadcast": {
+      if (!hasOnlyKeys(input, ["type", "report"]) || (input.report !== "off-air" && input.report !== "resumed")) return null;
+      return { input: { type: "broadcast", report: input.report }, selectedEquipmentId: selected };
+    }
+    case "handoff": {
+      if (!hasOnlyKeys(input, ["type", "text"]) || typeof input.text !== "string") return null;
+      if (input.text.trim() === "" || input.text.length > MAX_INPUT_LENGTH) return null;
+      return { input: { type: "handoff", text: input.text }, selectedEquipmentId: selected };
     }
     case "equipment": {
       if (!hasOnlyKeys(input, ["type", "equipmentId"]) || !isKnownEquipmentId(input.equipmentId)) return null;
@@ -122,20 +134,21 @@ export function parseEvent(raw: unknown): SessionEvent | null {
 
 /**
  * Rebuild a conversation from inputs. Returns null if any input could not
- * have happened: a button that wasn't on screen at that point, or an input
- * the engine rejected.
+ * have happened: a button that wasn't on screen for that exact question
+ * instance, or any input the engine refuses. Refused inputs are never saved,
+ * so finding one means the data was not written by the app.
  */
 export function replayEvents(events: readonly SessionEvent[]): ConversationState | null {
   let state = createConversation();
   for (const event of events) {
     if (event.input.type === "option") {
-      const optionId = event.input.optionId;
-      if (optionId === "restart" || !describeStep(state).options.some((o) => o.id === optionId)) return null;
+      const { optionId, instanceId } = event.input;
+      const view = describeStep(state);
+      if (optionId === "restart" || instanceId !== view.instanceId || !view.options.some((o) => o.id === optionId)) return null;
     }
-    const before = state.messages.length;
-    state = respond(state, event.input, { selectedEquipmentId: event.selectedEquipmentId }).state;
-    // Every accepted input adds the presenter's own message; a notice-only change means it was rejected.
-    if (!state.messages.slice(before).some((m) => m.role === "user")) return null;
+    const result = respond(state, event.input, { selectedEquipmentId: event.selectedEquipmentId });
+    if (result.rejected) return null;
+    state = result.state;
   }
   return state;
 }

@@ -13,10 +13,17 @@ export const EXPIRY_CHECK_INTERVAL_MS = 30_000;
 interface TroubleshooterContextValue {
   conversation: ConversationState;
   /**
-   * Process a user input. Returns false if it was not processed because the
-   * session had expired (the expired session is cleared first).
+   * Process a user input. Returns false if it was not processed: the session
+   * had expired (it is cleared first), or the engine refused the input (a
+   * stale button, text too long…; see `rejection`). Refused inputs are never saved.
    */
   send: (input: UserInput) => boolean;
+  /** RT-002D-R1: why the last input was refused, if it was. Cleared by the next accepted input. */
+  rejection: string | null;
+  /** RT-002D-R1: the always-available broadcast controls. */
+  reportBroadcast: (report: "off-air" | "resumed") => boolean;
+  /** RT-002D-R1: carry a Knowledge Centre search's safety content into the conversation. */
+  handoff: (text: string) => boolean;
   /**
    * Clear the conversation, the selected equipment and the saved session.
    * Only called after the user confirms (see ConfirmClear).
@@ -57,6 +64,7 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
   const [restored, setRestored] = useState(false);
   const [expired, setExpired] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
+  const [rejection, setRejection] = useState<string | null>(null);
   /** Every presenter input since the conversation began: what is saved and replayed (RT-002D). */
   const events = useRef<SessionEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -183,6 +191,12 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       touch();
       const context = { selectedEquipmentId: selected.current };
       const result = respond(current.current, input, context);
+      // A refused input changes nothing and is never saved or replayed.
+      if (result.rejected) {
+        setRejection(result.rejected);
+        return false;
+      }
+      setRejection(null);
       events.current = [...events.current, { input, selectedEquipmentId: context.selectedEquipmentId }];
       apply(result.state);
       if (result.commands.length > 0) run(result.commands);
@@ -204,6 +218,11 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       const continuing = hasUserContent(current.current);
       const base = continuing ? current.current : createConversation();
       const result = respond(base, { type: "topic", topicId }, { selectedEquipmentId: null });
+      if (result.rejected) {
+        setRejection(result.rejected);
+        return false;
+      }
+      setRejection(null);
       const event: SessionEvent = { input: { type: "topic", topicId }, selectedEquipmentId: null };
       events.current = continuing ? [...events.current, event] : [event];
       apply(result.state);
@@ -216,6 +235,8 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
   const dismissRestored = useCallback(() => setRestored(false), []);
   const dismissExpired = useCallback(() => setExpired(false), []);
   const dismissRestoreFailed = useCallback(() => setRestoreFailed(false), []);
+  const reportBroadcast = useCallback((report: "off-air" | "resumed") => send({ type: "broadcast", report }), [send]);
+  const handoff = useCallback((text: string) => send({ type: "handoff", text }), [send]);
 
   const value = useMemo(
     () => ({
@@ -230,8 +251,11 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       dismissExpired,
       restoreFailed,
       dismissRestoreFailed,
+      rejection,
+      reportBroadcast,
+      handoff,
     }),
-    [conversation, send, endSession, startTopic, restored, dismissRestored, expired, dismissExpired, restoreFailed, dismissRestoreFailed],
+    [conversation, send, endSession, startTopic, restored, dismissRestored, expired, dismissExpired, restoreFailed, dismissRestoreFailed, rejection, reportBroadcast, handoff],
   );
   return <TroubleshooterContext.Provider value={value}>{children}</TroubleshooterContext.Provider>;
 }

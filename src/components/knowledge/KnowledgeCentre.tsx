@@ -21,7 +21,17 @@ export function KnowledgeCentre() {
   const [ignoreSelection, setIgnoreSelection] = useState(false);
   const deferredQuery = useDeferredValue(query);
   const { state: workspace, run } = useWorkspace();
+  const { handoff } = useTroubleshooter();
+  const router = useRouter();
   const selected = getEquipmentById(workspace.selectedEquipmentId);
+  /**
+   * RT-002D-R1: carry the search's safety content into the troubleshooter. The
+   * troubleshooter re-checks the text itself and never treats it as an answer.
+   */
+  const openTroubleshooterWithSafety = () => {
+    handoff(deferredQuery);
+    router.push("/troubleshooter");
+  };
 
   const response = useMemo(
     () => searchKnowledge(deferredQuery, { selectedEquipmentId: workspace.selectedEquipmentId, ignoreSelection }),
@@ -88,16 +98,21 @@ export function KnowledgeCentre() {
               <div>
                 <p className="font-semibold text-alert-300">This sounds like silence on air — treat it as urgent.</p>
                 <p className="mt-0.5 text-ink-100">Contact technical support now. The troubleshooter will record what happened for them.</p>
-                <Link href="/troubleshooter" className={buttonStyles({ variant: "primary", size: "sm", className: "mt-2" })}>
+                <button type="button" onClick={openTroubleshooterWithSafety} className={buttonStyles({ variant: "primary", size: "sm", className: "mt-2" })}>
                   Open the troubleshooter
-                </Link>
+                </button>
               </div>
             </div>
           )}
           {response.safety.possibleSilence && (
             <div className="flex gap-3 rounded-lg border border-caution-400/30 bg-caution-900/40 px-4 py-3 text-sm text-ink-100">
               <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-caution-400" />
-              <p>If listeners may be hearing nothing, don&apos;t search — use the troubleshooter now; possible silence on air is treated as urgent.</p>
+              <div>
+                <p>If listeners may be hearing nothing, don&apos;t search — use the troubleshooter now; possible silence on air is treated as urgent.</p>
+                <button type="button" onClick={openTroubleshooterWithSafety} className={buttonStyles({ size: "sm", className: "mt-2" })}>
+                  Check this in the troubleshooter
+                </button>
+              </div>
             </div>
           )}
 
@@ -134,7 +149,12 @@ export function KnowledgeCentre() {
               <h2 className="text-sm font-semibold text-ink-100">{response.status === "clarify" ? "Which is closest?" : "This looks like"}</h2>
               <ul className="mt-2 grid gap-2 md:grid-cols-2">
                 {response.interpretations.map((interp) => (
-                  <InterpretationCard key={interp.intentId + (interp.equipmentId ?? "")} interp={interp} onShow={(id) => run(showEquipmentCommands(id))} />
+                  <InterpretationCard
+                    key={interp.intentId + (interp.equipmentId ?? "")}
+                    interp={interp}
+                    onShow={(id) => run(showEquipmentCommands(id))}
+                    safetyQuery={response.safety.urgent || response.safety.possibleSilence ? deferredQuery : null}
+                  />
                 ))}
               </ul>
             </div>
@@ -172,11 +192,21 @@ export function KnowledgeCentre() {
   );
 }
 
-function InterpretationCard({ interp, onShow }: { interp: SearchInterpretation; onShow: (equipmentId: string) => void }) {
-  const { startTopic, send } = useTroubleshooter();
+function InterpretationCard({
+  interp,
+  onShow,
+  safetyQuery,
+}: {
+  interp: SearchInterpretation;
+  onShow: (equipmentId: string) => void;
+  /** The search, when it carried a safety concern that must not be lost on the way (RT-002D-R1). */
+  safetyQuery: string | null;
+}) {
+  const { startTopic, send, handoff } = useTroubleshooter();
   const router = useRouter();
   const equipment = getEquipmentById(interp.equipmentId);
   const troubleshoot = () => {
+    if (safetyQuery) handoff(safetyQuery);
     const started = interp.topicId ? startTopic(interp.topicId) : equipment ? send({ type: "equipment", equipmentId: equipment.id }) : false;
     if (started) router.push("/troubleshooter");
   };

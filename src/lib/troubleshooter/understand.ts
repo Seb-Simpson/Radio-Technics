@@ -374,7 +374,7 @@ export function understand(rawText: string): Understanding {
   const hypotheticalOffAir = broadcast.status === "hypothetical";
   const clearAirSilence = offAir === "confirmed";
   // Past, hypothetical or denied silence on air is not a silence signal now.
-  const silenceDiscounted = broadcast.status === "historical" || broadcast.status === "hypothetical" || broadcast.status === "denied";
+  const silenceDiscounted = broadcast.status === "historical" || broadcast.status === "hypothetical" || broadcast.status === "denied" || broadcast.status === "resumed";
 
   const effectiveText = effective.join(", ");
   const signals: Signal[] = [];

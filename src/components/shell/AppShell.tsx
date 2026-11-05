@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { isActivePath, navItems } from "./navigation";
 import { BrandMark } from "./BrandMark";
+import { UrgentBroadcastButton } from "@/components/troubleshooter/UrgentBroadcastButton";
 
 function NavList({ pathname, onNavigate, variant }: { pathname: string; onNavigate?: () => void; variant: "sidebar" | "menu" }) {
   return (
@@ -147,6 +148,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 pb-[env(safe-area-inset-bottom)] focus:outline-none">
+        {/*
+          RT-002D-R1: an urgent broadcast problem can be reported from every page,
+          whatever the language understanding makes of typed words. In the page
+          flow (never pinned over content). The troubleshooter shows its own copy.
+        */}
+        {!isActivePath(pathname, "/troubleshooter") && (
+          <div className="flex px-4 pt-3 sm:px-6 lg:justify-end lg:px-8">
+            <UrgentBroadcastButton className="w-full lg:w-auto" />
+          </div>
+        )}
         {children}
       </main>
     </div>

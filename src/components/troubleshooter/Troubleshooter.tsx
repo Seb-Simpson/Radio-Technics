@@ -1,13 +1,14 @@
 "use client";
 
-import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, RotateCcw, SendHorizontal, TriangleAlert, Undo2, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, PencilLine, RadioTower, RotateCcw, SendHorizontal, TriangleAlert, Undo2, X } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { ConfirmClear } from "./ConfirmClear";
+import { UrgentBroadcastButton } from "./UrgentBroadcastButton";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { getEquipmentById } from "@/lib/content/equipment";
 import { cn } from "@/lib/cn";
-import { buildSupportSummary, describeStep } from "@/lib/troubleshooter/engine";
+import { buildSupportSummary, describeStep, MAX_INPUT_LENGTH } from "@/lib/troubleshooter/engine";
 import { useTroubleshooter } from "@/lib/troubleshooter/TroubleshooterProvider";
 import type { ChatMessage, StepOption } from "@/lib/troubleshooter/types";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
@@ -21,7 +22,8 @@ const universalIcons: Record<string, typeof CircleHelp> = {
 };
 
 export function Troubleshooter() {
-  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired, restoreFailed, dismissRestoreFailed } = useTroubleshooter();
+  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired, restoreFailed, dismissRestoreFailed, rejection, reportBroadcast } =
+    useTroubleshooter();
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
@@ -35,7 +37,8 @@ export function Troubleshooter() {
   const selected = getEquipmentById(workspace.selectedEquipmentId);
   const answerOptions = step.options.filter((o) => o.kind === "answer" || o.kind === "topic");
   const universalOptions = step.options.filter((o) => o.kind === "universal");
-  const navOptions = step.options.filter((o) => o.kind === "restart" || o.kind === "back");
+  const navOptions = step.options.filter((o) => o.kind === "restart" || o.kind === "back" || o.kind === "correct");
+  const incidentActive = conversation.incident.status === "possible" || conversation.incident.status === "confirmed";
   const showSummary = step.kind === "support" || step.kind === "outcome";
 
   // Show the studio beside the chat on wide screens; otherwise "Show me where" navigates.
@@ -123,19 +126,37 @@ export function Troubleshooter() {
     endSession();
   };
 
-  const choose = (option: StepOption) => {
+  /**
+   * RT-002D-R1: a press is bound to the question instance its button was shown
+   * for. The 2nd/3rd click of a double/triple click (event.detail > 1) is
+   * ignored, so a fast double-click can never also press whatever button
+   * appears in the same place on the next question.
+   */
+  const choose = (option: StepOption, event?: MouseEvent<HTMLButtonElement>) => {
+    if (event && event.detail > 1) return;
     if (option.kind === "restart") {
       requestClear();
       return;
     }
     focusOptionsNext.current = true;
-    send({ type: "option", optionId: option.id });
+    send({ type: "option", optionId: option.id, instanceId: step.instanceId });
+  };
+
+  /** Holding Enter (or Space) down must not keep answering the next questions. */
+  const blockKeyRepeat = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.repeat && (event.key === "Enter" || event.key === " ")) event.preventDefault();
   };
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     if (!draft.trim()) {
       setInputError("Type a short description of the problem first.");
+      requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
+      return;
+    }
+    // RT-002D-R1: never cut text short — part of it might be the safety-relevant part.
+    if (draft.length > MAX_INPUT_LENGTH) {
+      setInputError(`That's ${draft.length} characters; the limit is ${MAX_INPUT_LENGTH}. Please shorten it — nothing has been sent. If the station is off air, use the “We're off air” button.`);
       requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
       return;
     }
@@ -178,6 +199,11 @@ export function Troubleshooter() {
           </button>
         </header>
 
+        {/* RT-002D-R1: always available, whatever the language understanding makes of the presenter's words. */}
+        <div className="border-b border-ink-750 px-4 py-2.5 sm:px-5 xl:tall:shrink-0">
+          <UrgentBroadcastButton className="w-full sm:w-auto" />
+        </div>
+
         {/*
           RT-QA-002B: in the fixed-height layout the header, notices and reply box keep
           their size; notices scroll if there are many, and the answers area shrinks
@@ -186,21 +212,31 @@ export function Troubleshooter() {
         <div className="xl:tall:max-h-[35%] xl:tall:shrink-0 xl:tall:overflow-y-auto">
         {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
 
-        {/* Urgency stays visible whatever step the conversation is on. */}
+        {/* Urgency stays visible whatever step the conversation is on (RT-002D-R1: by incident status). */}
         {conversation.urgent ? (
-          <div role="status" data-testid="urgent-banner" className="flex gap-2.5 border-b border-alert-400/40 bg-alert-900/50 px-4 py-2.5 text-[13px] sm:px-5">
+          <div role="status" data-testid="urgent-banner" className="flex flex-wrap items-start gap-2.5 border-b border-alert-400/40 bg-alert-900/50 px-4 py-2.5 text-[13px] sm:px-5">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-alert-300" />
-            {/* RT-002D: confirmed and possible interruptions are worded differently. */}
-            {conversation.confirmedOffAir ? (
-              <p className="text-ink-50">
+            {conversation.incident.status === "reported-resumed" ? (
+              <p className="min-w-0 flex-1 text-ink-50">
+                <span className="font-semibold text-alert-300">Broadcast interruption reported earlier.</span> You&apos;ve reported that
+                broadcasting has resumed — Radio Technics can&apos;t check that. Still tell technical support what happened.
+              </p>
+            ) : conversation.incident.status === "confirmed" ? (
+              <p className="min-w-0 flex-1 text-ink-50">
                 <span className="font-semibold text-alert-300">Urgent: a broadcast interruption has been reported.</span> Contact technical
                 support now. Their contact details haven&apos;t been configured in Radio Technics yet.
               </p>
             ) : (
-              <p className="text-ink-50">
+              <p className="min-w-0 flex-1 text-ink-50">
                 <span className="font-semibold text-alert-300">Possible broadcast interruption — not yet confirmed.</span> It&apos;s being
                 treated as urgent: contact technical support now. Their contact details haven&apos;t been configured in Radio Technics yet.
               </p>
+            )}
+            {incidentActive && (
+              <button type="button" onClick={() => reportBroadcast("resumed")} className={buttonStyles({ size: "sm", className: "min-h-10" })}>
+                <RadioTower aria-hidden className="size-3.5 text-signal-400" />
+                Broadcasting has resumed
+              </button>
             )}
           </div>
         ) : conversation.possibleSilence ? (
@@ -301,7 +337,7 @@ export function Troubleshooter() {
         <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-3 sm:px-5 xl:tall:min-h-0 xl:tall:shrink xl:tall:overflow-y-auto">
           {showSummary && <SupportSummary text={buildSupportSummary(conversation)} />}
 
-          <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses">
+          <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses" onKeyDownCapture={blockKeyRepeat}>
             {answerOptions.length > 0 && (
               <div
                 className={cn(
@@ -311,9 +347,10 @@ export function Troubleshooter() {
               >
                 {answerOptions.map((option) => (
                   <button
-                    key={option.id}
+                    // A new question instance gets new buttons, never reused ones.
+                    key={`${step.instanceId}:${option.id}`}
                     type="button"
-                    onClick={() => choose(option)}
+                    onClick={(event) => choose(option, event)}
                     className="rounded-lg border border-ink-600 bg-ink-800 px-3.5 py-2.5 text-left text-[15px] font-medium text-ink-50 transition-colors hover:border-signal-500/60 hover:bg-ink-750"
                   >
                     {option.label}
@@ -327,15 +364,21 @@ export function Troubleshooter() {
                 {universalOptions.map((option) => {
                   const Icon = universalIcons[option.id] ?? CircleHelp;
                   return (
-                    <button key={option.id} type="button" onClick={() => choose(option)} className={buttonStyles({ size: "sm" })}>
+                    <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)} className={buttonStyles({ size: "sm" })}>
                       <Icon aria-hidden className="size-3.5 text-signal-400" />
                       {option.label}
                     </button>
                   );
                 })}
                 {navOptions.map((option) => (
-                  <button key={option.id} type="button" onClick={() => choose(option)} className={buttonStyles({ size: "sm" })}>
-                    {option.kind === "back" ? <Undo2 aria-hidden className="size-3.5" /> : <RotateCcw aria-hidden className="size-3.5" />}
+                  <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)} className={buttonStyles({ size: "sm" })}>
+                    {option.kind === "back" ? (
+                      <Undo2 aria-hidden className="size-3.5" />
+                    ) : option.kind === "correct" ? (
+                      <PencilLine aria-hidden className="size-3.5" />
+                    ) : (
+                      <RotateCcw aria-hidden className="size-3.5" />
+                    )}
                     {option.label}
                   </button>
                 ))}
@@ -360,7 +403,6 @@ export function Troubleshooter() {
                 id="troubleshooter-input"
                 rows={1}
                 value={draft}
-                maxLength={500}
                 onChange={(event) => {
                   setDraft(event.target.value);
                   if (inputError) setInputError(null);
@@ -378,6 +420,12 @@ export function Troubleshooter() {
             {inputError && (
               <p id="troubleshooter-input-error" role="alert" className="mt-1.5 text-[13px] text-alert-300">
                 {inputError}
+              </p>
+            )}
+            {/* RT-002D-R1: why the last input was refused (stale button, too long…). Nothing was recorded. */}
+            {!inputError && rejection && (
+              <p role="status" data-testid="input-rejected" className="mt-1.5 text-[13px] text-caution-300">
+                {rejection}
               </p>
             )}
           </form>

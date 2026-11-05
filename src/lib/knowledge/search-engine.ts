@@ -221,8 +221,13 @@ function expandNounIs(text: string): string {
 /** "red square", "green box"… are screen indicators, not the green button. */
 const COLOUR_SHAPE = /\b(red|green|blue|yellow|orange|amber|grey|gray|white|black)\s+(square|squares|box|boxes|light|lights|bit|dot|dots|circle|icon|symbol|bar|block|line|tick)\b/gi;
 
+/** Longest query processed at all; longer ones are refused, never silently cut (RT-002D-R1). */
+export const MAX_QUERY_LENGTH = 500;
+
 export function searchKnowledge(rawQuery: string, context: SearchContext, source: KnowledgeArticle[] = allArticles): SearchResponse {
-  const query = expandNounIs(rawQuery.trim().slice(0, 300));
+  const full = rawQuery.trim();
+  // Ranking only looks at the first 300 characters; safety (below) reads the whole query.
+  const query = expandNounIs(full.slice(0, 300));
   const base = {
     query,
     engine: "local-keyword" as const,
@@ -233,12 +238,20 @@ export function searchKnowledge(rawQuery: string, context: SearchContext, source
     articles: [] as ArticleResult[],
   };
   if (!query) return { ...base, status: "empty" };
+  if (full.length > MAX_QUERY_LENGTH) {
+    return {
+      ...base,
+      status: "no-match",
+      message: `That search is ${full.length} characters long; the limit is ${MAX_QUERY_LENGTH}. Please shorten it \u2014 none of it has been used. If the station is off air, use the \u201cWe're off air\u201d button.`,
+    };
+  }
 
-  // 1. Safety first, independent of ranking (same classifier as the troubleshooter).
-  const u = understand(query);
+  // 1. Safety first, on the WHOLE query, independent of ranking (same classifier as the troubleshooter).
+  const u = understand(full);
+  const concern = u.broadcast.status === "current-confirmed" || u.broadcast.status === "current-possible";
   const safety = {
-    urgent: u.clearAirSilence,
-    possibleSilence: !u.clearAirSilence && (u.signals.includes("silence") || u.signals.includes("on-air-unknown")),
+    urgent: concern,
+    possibleSilence: !concern && (u.signals.includes("silence") || u.signals.includes("on-air-unknown")),
   };
 
   const normalised = normaliseReply(query);

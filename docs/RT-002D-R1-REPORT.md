@@ -100,9 +100,10 @@ No test was skipped or deleted to get a green result.
 ## Results (final code)
 | Check | Result |
 | --- | --- |
-| `npm ci` | see PR description (final run) |
-| `npm run check` | typecheck and build pass; 22 files, 666 unit tests |
-| `npm run test:e2e` | see PR description: three complete runs, with passed/failed/flaky counts and the 181 by-design skips |
+| `npm ci` | ok, 0 vulnerabilities |
+| `npm run check` | typecheck and build pass; 22 files, 666 unit tests passed |
+| `npm run test:e2e`, three complete runs | each: **309 passed, 0 failed, 0 flaky**; 181 skipped by design (project-scoped `test.skip`: tests that set their own window size run on the desktop project only; touch-only tests skip desktop). 309 + 181 = 490 listed |
+| Accessibility (axe) | included in the runs above at 1440, 820, 390, 375 and 320 px, including the urgent banner and controls |
 
 ## Remaining safety limitations
 - Interpretation is still rule-based, so suggestions can be wrong. "It was working last week, but not today" still *suggests* "it was working earlier". The architecture makes that safe: nothing is recorded until the presenter presses an answer, and they see exactly what it says. It may cost a tap.

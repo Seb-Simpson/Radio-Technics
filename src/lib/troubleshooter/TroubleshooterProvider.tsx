@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { clearSession, getSessionStorage, isSessionExpired, loadSession, saveSession } from "@/lib/session/storage";
+import { clearSession, getSessionStorage, isSessionExpired, loadSession, saveSession, type SessionEvent } from "@/lib/session/storage";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
 import type { WorkspaceCommand } from "@/lib/workspace/commands";
 import { createConversation, respond } from "./engine";
@@ -13,10 +13,17 @@ export const EXPIRY_CHECK_INTERVAL_MS = 30_000;
 interface TroubleshooterContextValue {
   conversation: ConversationState;
   /**
-   * Process a user input. Returns false if it was not processed because the
-   * session had expired (the expired session is cleared first).
+   * Process a user input. Returns false if it was not processed: the session
+   * had expired (it is cleared first), or the engine refused the input (a
+   * stale button, text too long…; see `rejection`). Refused inputs are never saved.
    */
   send: (input: UserInput) => boolean;
+  /** RT-002D-R1: why the last input was refused, if it was. Cleared by the next accepted input. */
+  rejection: string | null;
+  /** RT-002D-R1: the always-available broadcast controls. */
+  reportBroadcast: (report: "off-air" | "resumed") => boolean;
+  /** RT-002D-R1: carry a Knowledge Centre search's safety content into the conversation. */
+  handoff: (text: string) => boolean;
   /**
    * Clear the conversation, the selected equipment and the saved session.
    * Only called after the user confirms (see ConfirmClear).
@@ -32,6 +39,9 @@ interface TroubleshooterContextValue {
   /** Set when an open session was cleared for being idle too long. */
   expired: boolean;
   dismissExpired: () => void;
+  /** RT-002D: a saved conversation existed but couldn't be safely rebuilt, so it was cleared. */
+  restoreFailed: boolean;
+  dismissRestoreFailed: () => void;
 }
 
 const TroubleshooterContext = createContext<TroubleshooterContextValue | null>(null);
@@ -53,6 +63,10 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
   const [conversation, setConversation] = useState<ConversationState>(createConversation);
   const [restored, setRestored] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [restoreFailed, setRestoreFailed] = useState(false);
+  const [rejection, setRejection] = useState<string | null>(null);
+  /** Every presenter input since the conversation began: what is saved and replayed (RT-002D). */
+  const events = useRef<SessionEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const current = useRef(conversation);
   const selected = useRef(workspace.selectedEquipmentId);
@@ -76,6 +90,7 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
   const clearEverything = useCallback(() => {
     clearSession(getSessionStorage());
     apply(createConversation());
+    events.current = [];
     if (selected.current !== null) systemChange.current = true;
     run([{ type: "clear_selection" }]);
     lastActivity.current = null;
@@ -108,7 +123,9 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
   useEffect(() => {
     const result = loadSession(getSessionStorage(), clock());
     if (result.status === "restored") {
+      // The conversation was rebuilt by replaying validated inputs, never read from storage.
       const { conversation: saved, workspace: ws, lastActivityAt } = result.session;
+      events.current = result.session.events;
       apply(saved);
       // Restoring is not activity: keep the original time so it can't extend the session.
       lastActivity.current = lastActivityAt;
@@ -125,6 +142,8 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       setRestored(hasUserContent(saved));
     } else if (result.status === "discarded" && result.reason === "expired") {
       setExpired(true);
+    } else if (result.status === "discarded") {
+      setRestoreFailed(true);
     }
     setLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
@@ -158,7 +177,7 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
     }
     saveSession(
       storage,
-      conversation,
+      events.current,
       { selectedEquipmentId: workspace.selectedEquipmentId, selectedHotspotId: workspace.selectedHotspotId, activeViewId: workspace.activeViewId },
       lastActivity.current,
     );
@@ -170,7 +189,15 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       // An expired session is cleared, and the new input does not revive it.
       if (enforceExpiry()) return false;
       touch();
-      const result = respond(current.current, input, { selectedEquipmentId: selected.current });
+      const context = { selectedEquipmentId: selected.current };
+      const result = respond(current.current, input, context);
+      // A refused input changes nothing and is never saved or replayed.
+      if (result.rejected) {
+        setRejection(result.rejected);
+        return false;
+      }
+      setRejection(null);
+      events.current = [...events.current, { input, selectedEquipmentId: context.selectedEquipmentId }];
       apply(result.state);
       if (result.commands.length > 0) run(result.commands);
       return true;
@@ -188,8 +215,16 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       if (enforceExpiry()) return false;
       touch();
       // Never discard an ongoing conversation implicitly (RT-QA-001 A2).
-      const base = hasUserContent(current.current) ? current.current : createConversation();
+      const continuing = hasUserContent(current.current);
+      const base = continuing ? current.current : createConversation();
       const result = respond(base, { type: "topic", topicId }, { selectedEquipmentId: null });
+      if (result.rejected) {
+        setRejection(result.rejected);
+        return false;
+      }
+      setRejection(null);
+      const event: SessionEvent = { input: { type: "topic", topicId }, selectedEquipmentId: null };
+      events.current = continuing ? [...events.current, event] : [event];
       apply(result.state);
       if (result.commands.length > 0) run(result.commands);
       return true;
@@ -199,6 +234,9 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
 
   const dismissRestored = useCallback(() => setRestored(false), []);
   const dismissExpired = useCallback(() => setExpired(false), []);
+  const dismissRestoreFailed = useCallback(() => setRestoreFailed(false), []);
+  const reportBroadcast = useCallback((report: "off-air" | "resumed") => send({ type: "broadcast", report }), [send]);
+  const handoff = useCallback((text: string) => send({ type: "handoff", text }), [send]);
 
   const value = useMemo(
     () => ({
@@ -211,8 +249,13 @@ export function TroubleshooterProvider({ children, clock = Date.now }: { childre
       dismissRestored,
       expired,
       dismissExpired,
+      restoreFailed,
+      dismissRestoreFailed,
+      rejection,
+      reportBroadcast,
+      handoff,
     }),
-    [conversation, send, endSession, startTopic, restored, dismissRestored, expired, dismissExpired],
+    [conversation, send, endSession, startTopic, restored, dismissRestored, expired, dismissExpired, restoreFailed, dismissRestoreFailed, rejection, reportBroadcast, handoff],
   );
   return <TroubleshooterContext.Provider value={value}>{children}</TroubleshooterContext.Provider>;
 }

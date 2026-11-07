@@ -1,13 +1,15 @@
 "use client";
 
-import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, RotateCcw, SendHorizontal, TriangleAlert, Undo2, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, PencilLine, RadioTower, RotateCcw, SendHorizontal, TriangleAlert, Undo2, X } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { ConfirmClear } from "./ConfirmClear";
+import { UrgentBroadcastButton } from "./UrgentBroadcastButton";
+import { ACTIVATION_GUARD } from "./activation-guard";
 import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { getEquipmentById } from "@/lib/content/equipment";
 import { cn } from "@/lib/cn";
-import { buildSupportSummary, describeStep } from "@/lib/troubleshooter/engine";
+import { buildSupportSummary, describeStep, MAX_INPUT_LENGTH } from "@/lib/troubleshooter/engine";
 import { useTroubleshooter } from "@/lib/troubleshooter/TroubleshooterProvider";
 import type { ChatMessage, StepOption } from "@/lib/troubleshooter/types";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
@@ -21,7 +23,8 @@ const universalIcons: Record<string, typeof CircleHelp> = {
 };
 
 export function Troubleshooter() {
-  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired } = useTroubleshooter();
+  const { conversation, send, endSession, restored, dismissRestored, expired, dismissExpired, restoreFailed, dismissRestoreFailed, rejection, reportBroadcast } =
+    useTroubleshooter();
   const { state: workspace, run, setEmbeddedExplorerVisible } = useWorkspace();
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
@@ -35,7 +38,17 @@ export function Troubleshooter() {
   const selected = getEquipmentById(workspace.selectedEquipmentId);
   const answerOptions = step.options.filter((o) => o.kind === "answer" || o.kind === "topic");
   const universalOptions = step.options.filter((o) => o.kind === "universal");
-  const navOptions = step.options.filter((o) => o.kind === "restart" || o.kind === "back");
+  const navOptions = step.options.filter((o) => o.kind === "restart" || o.kind === "back" || o.kind === "correct");
+  const incidentActive = conversation.incident.status === "possible" || conversation.incident.status === "confirmed";
+
+  // A new question's buttons are armed only after a short pause (see activation-guard.ts).
+  const [armedInstance, setArmedInstance] = useState<number | null>(null);
+  useEffect(() => {
+    if (ACTIVATION_GUARD.ms === 0) return;
+    const timer = window.setTimeout(() => setArmedInstance(step.instanceId), ACTIVATION_GUARD.ms);
+    return () => window.clearTimeout(timer);
+  }, [step.instanceId]);
+  const armed = ACTIVATION_GUARD.ms === 0 || armedInstance === step.instanceId;
   const showSummary = step.kind === "support" || step.kind === "outcome";
 
   // Show the studio beside the chat on wide screens; otherwise "Show me where" navigates.
@@ -54,25 +67,59 @@ export function Troubleshooter() {
     };
   }, [setEmbeddedExplorerVisible]);
 
-  // Keep the newest message in view and move keyboard focus to the new options.
+  /*
+   * RT-QA-002C: ONE scroll owner. After each conversation update (and after
+   * layout, in the next frame) exactly one scroll instruction is issued:
+   *   - Fixed-height wide layout: only the log scrolls; the page never moves.
+   *   - Flowing layout (phones, short windows): if the first new assistant
+   *     message and the reply box fit on screen together, show both with the
+   *     reply box at the bottom; otherwise show the new question at the top and
+   *     leave the reply box one Tab / scroll away. Nothing else scrolls: focus
+   *     moves use preventScroll, and sending doesn't scroll on its own.
+   * Respects prefers-reduced-motion.
+   */
+  const shownMessages = useRef(conversation.messages.length);
   useEffect(() => {
-    const log = logRef.current;
-    if (log && log.scrollHeight > log.clientHeight + 1) {
-      // Wide layout: the log scrolls internally.
-      log.scrollTop = log.scrollHeight;
-    } else if (log && conversation.messages.length > 1) {
-      // Phones/tablets: the page scrolls. Bring the newest message into view below the header.
-      const last = log.querySelector("li:last-child");
-      const top = last ? last.getBoundingClientRect().top : 0;
-      if (last && (top < 72 || top > window.innerHeight - 240)) {
-        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-        window.scrollTo?.({ top: window.scrollY + top - 80, behavior: reduce ? "auto" : "smooth" });
+    const previous = shownMessages.current;
+    shownMessages.current = conversation.messages.length;
+    const frame = requestAnimationFrame(() => {
+      const log = logRef.current;
+      if (!log) return;
+      const behavior: ScrollBehavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      const logScrolls = getComputedStyle(log).overflowY === "auto" || getComputedStyle(log).overflowY === "scroll";
+      if (logScrolls) {
+        log.scrollTo?.({ top: log.scrollHeight, behavior });
+      } else if (conversation.messages.length > 1 && conversation.messages.length !== previous) {
+        // The reply to the presenter's latest message (also right after a restore).
+        const items = [...log.querySelectorAll<HTMLElement>("li[data-role]")];
+        const lastUser = items.map((el) => el.dataset.role).lastIndexOf("user");
+        const target = items.slice(lastUser + 1).find((el) => el.dataset.role === "assistant") ?? items[items.length - 1];
+        const form = formRef.current;
+        if (target && form) {
+          const header = document.querySelector<HTMLElement>("[data-app-header]");
+          const headerStyle = header ? getComputedStyle(header).position : "";
+          const headerBottom = header && (headerStyle === "sticky" || headerStyle === "fixed") ? header.getBoundingClientRect().bottom : 0;
+          const topLimit = headerBottom + 8;
+          const bottomLimit = window.innerHeight - 8;
+          const messageTop = target.getBoundingClientRect().top;
+          const formBottom = form.getBoundingClientRect().bottom;
+          const bothVisible = messageTop >= topLimit && formBottom <= bottomLimit;
+          if (!bothVisible) {
+            const fits = formBottom - messageTop <= bottomLimit - topLimit;
+            // A focused reply box must never be scrolled out of view (WCAG 2.4.11):
+            // after typing, keep it visible and show as much of the reply as fits.
+            const composerFocused = form.contains(document.activeElement);
+            const delta = fits || composerFocused ? formBottom - bottomLimit : messageTop - topLimit;
+            window.scrollTo?.({ top: Math.max(0, window.scrollY + delta), behavior });
+          }
+        }
       }
-    }
-    if (focusOptionsNext.current) {
-      focusOptionsNext.current = false;
-      optionsRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
-    }
+      if (focusOptionsNext.current) {
+        focusOptionsNext.current = false;
+        optionsRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [conversation.messages.length]);
 
   const [confirmingClear, setConfirmingClear] = useState(false);
@@ -92,13 +139,26 @@ export function Troubleshooter() {
     endSession();
   };
 
-  const choose = (option: StepOption) => {
+  /**
+   * RT-002D-R1: a press is bound to the question instance its button was shown
+   * for. The 2nd/3rd click of a double/triple click (event.detail > 1) is
+   * ignored, so a fast double-click can never also press whatever button
+   * appears in the same place on the next question.
+   */
+  const choose = (option: StepOption, event?: MouseEvent<HTMLButtonElement>) => {
+    if (event && event.detail > 1) return;
+    if (!armed) return;
     if (option.kind === "restart") {
       requestClear();
       return;
     }
     focusOptionsNext.current = true;
-    send({ type: "option", optionId: option.id });
+    send({ type: "option", optionId: option.id, instanceId: step.instanceId });
+  };
+
+  /** Holding Enter (or Space) down must not keep answering the next questions. */
+  const blockKeyRepeat = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.repeat && (event.key === "Enter" || event.key === " ")) event.preventDefault();
   };
 
   const submit = (event?: FormEvent) => {
@@ -108,14 +168,16 @@ export function Troubleshooter() {
       requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
       return;
     }
+    // RT-002D-R1: never cut text short — part of it might be the safety-relevant part.
+    if (draft.length > MAX_INPUT_LENGTH) {
+      setInputError(`That's ${draft.length} characters; the limit is ${MAX_INPUT_LENGTH}. Please shorten it — nothing has been sent. If the station is off air, use the “We're off air” button.`);
+      requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
+      return;
+    }
     setInputError(null);
     // If the session had expired it is cleared and the message is not sent; keep the text so it can be resent.
-    if (send({ type: "text", text: draft })) {
-      setDraft("");
-      // Where the page flows (phones, short windows) new messages push the reply box
-      // down; keep it on screen so the conversation can continue.
-      requestAnimationFrame(() => formRef.current?.scrollIntoView?.({ block: "nearest" }));
-    }
+    // Scrolling after sending is handled by the single scroll owner above.
+    if (send({ type: "text", text: draft })) setDraft("");
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -151,6 +213,11 @@ export function Troubleshooter() {
           </button>
         </header>
 
+        {/* RT-002D-R1: always available, whatever the language understanding makes of the presenter's words. */}
+        <div className="border-b border-ink-750 px-4 py-2.5 sm:px-5 xl:tall:shrink-0">
+          <UrgentBroadcastButton className="w-full sm:w-auto" />
+        </div>
+
         {/*
           RT-QA-002B: in the fixed-height layout the header, notices and reply box keep
           their size; notices scroll if there are many, and the answers area shrinks
@@ -159,14 +226,32 @@ export function Troubleshooter() {
         <div className="xl:tall:max-h-[35%] xl:tall:shrink-0 xl:tall:overflow-y-auto">
         {confirmingClear && <ConfirmClear onConfirm={confirmClear} onCancel={cancelClear} />}
 
-        {/* Urgency stays visible whatever step the conversation is on. */}
+        {/* Urgency stays visible whatever step the conversation is on (RT-002D-R1: by incident status). */}
         {conversation.urgent ? (
-          <div role="status" data-testid="urgent-banner" className="flex gap-2.5 border-b border-alert-400/40 bg-alert-900/50 px-4 py-2.5 text-[13px] sm:px-5">
+          <div role="status" data-testid="urgent-banner" className="flex flex-wrap items-start gap-2.5 border-b border-alert-400/40 bg-alert-900/50 px-4 py-2.5 text-[13px] sm:px-5">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-alert-300" />
-            <p className="text-ink-50">
-              <span className="font-semibold text-alert-300">Urgent: silence on air reported.</span> Contact technical support now.
-              Their contact details haven&apos;t been configured in Radio Technics yet.
-            </p>
+            {conversation.incident.status === "reported-resumed" ? (
+              <p className="min-w-0 flex-1 text-ink-50">
+                <span className="font-semibold text-alert-300">Broadcast interruption reported earlier.</span> You&apos;ve reported that
+                broadcasting has resumed — Radio Technics can&apos;t check that. Still tell technical support what happened.
+              </p>
+            ) : conversation.incident.status === "confirmed" ? (
+              <p className="min-w-0 flex-1 text-ink-50">
+                <span className="font-semibold text-alert-300">Urgent: a broadcast interruption has been reported.</span> Contact technical
+                support now. Their contact details haven&apos;t been configured in Radio Technics yet.
+              </p>
+            ) : (
+              <p className="min-w-0 flex-1 text-ink-50">
+                <span className="font-semibold text-alert-300">Possible broadcast interruption — not yet confirmed.</span> It&apos;s being
+                treated as urgent: contact technical support now. Their contact details haven&apos;t been configured in Radio Technics yet.
+              </p>
+            )}
+            {incidentActive && (
+              <button type="button" onClick={() => reportBroadcast("resumed")} className={buttonStyles({ size: "sm", className: "min-h-10" })}>
+                <RadioTower aria-hidden className="size-3.5 text-signal-400" />
+                Broadcasting has resumed
+              </button>
+            )}
           </div>
         ) : conversation.possibleSilence ? (
           <div role="status" data-testid="possible-silence-banner" className="flex gap-2.5 border-b border-caution-400/30 bg-caution-900/40 px-4 py-2.5 text-[13px] sm:px-5">
@@ -188,6 +273,23 @@ export function Troubleshooter() {
               type="button"
               onClick={dismissExpired}
               aria-label="Dismiss session ended message"
+              className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </div>
+        )}
+
+        {restoreFailed && (
+          <div role="status" data-testid="restore-failed-notice" className="flex items-start justify-between gap-3 border-b border-ink-750 bg-ink-850/60 px-4 py-2.5 text-[13px] sm:px-5">
+            <p className="text-ink-200">
+              Your earlier conversation in this tab couldn&apos;t be restored safely, so it was cleared. Nothing from it has been used.
+              Please describe the problem again.
+            </p>
+            <button
+              type="button"
+              onClick={dismissRestoreFailed}
+              aria-label="Dismiss conversation not restored message"
               className="flex size-7 shrink-0 items-center justify-center rounded text-ink-400 hover:bg-ink-800 hover:text-ink-100"
             >
               <X aria-hidden className="size-3.5" />
@@ -249,7 +351,7 @@ export function Troubleshooter() {
         <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-3 sm:px-5 xl:tall:min-h-0 xl:tall:shrink xl:tall:overflow-y-auto">
           {showSummary && <SupportSummary text={buildSupportSummary(conversation)} />}
 
-          <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses">
+          <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses" onKeyDownCapture={blockKeyRepeat}>
             {answerOptions.length > 0 && (
               <div
                 className={cn(
@@ -259,9 +361,11 @@ export function Troubleshooter() {
               >
                 {answerOptions.map((option) => (
                   <button
-                    key={option.id}
+                    // A new question instance gets new buttons, never reused ones.
+                    key={`${step.instanceId}:${option.id}`}
                     type="button"
-                    onClick={() => choose(option)}
+                    onClick={(event) => choose(option, event)}
+                    aria-disabled={armed ? undefined : true}
                     className="rounded-lg border border-ink-600 bg-ink-800 px-3.5 py-2.5 text-left text-[15px] font-medium text-ink-50 transition-colors hover:border-signal-500/60 hover:bg-ink-750"
                   >
                     {option.label}
@@ -275,15 +379,23 @@ export function Troubleshooter() {
                 {universalOptions.map((option) => {
                   const Icon = universalIcons[option.id] ?? CircleHelp;
                   return (
-                    <button key={option.id} type="button" onClick={() => choose(option)} className={buttonStyles({ size: "sm" })}>
+                    <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)}
+                    aria-disabled={armed ? undefined : true} className={buttonStyles({ size: "sm" })}>
                       <Icon aria-hidden className="size-3.5 text-signal-400" />
                       {option.label}
                     </button>
                   );
                 })}
                 {navOptions.map((option) => (
-                  <button key={option.id} type="button" onClick={() => choose(option)} className={buttonStyles({ size: "sm" })}>
-                    {option.kind === "back" ? <Undo2 aria-hidden className="size-3.5" /> : <RotateCcw aria-hidden className="size-3.5" />}
+                  <button key={`${step.instanceId}:${option.id}`} type="button" onClick={(event) => choose(option, event)}
+                    aria-disabled={armed ? undefined : true} className={buttonStyles({ size: "sm" })}>
+                    {option.kind === "back" ? (
+                      <Undo2 aria-hidden className="size-3.5" />
+                    ) : option.kind === "correct" ? (
+                      <PencilLine aria-hidden className="size-3.5" />
+                    ) : (
+                      <RotateCcw aria-hidden className="size-3.5" />
+                    )}
                     {option.label}
                   </button>
                 ))}
@@ -308,12 +420,14 @@ export function Troubleshooter() {
                 id="troubleshooter-input"
                 rows={1}
                 value={draft}
-                maxLength={500}
                 onChange={(event) => {
                   setDraft(event.target.value);
                   if (inputError) setInputError(null);
                 }}
                 onKeyDown={onKeyDown}
+                // Browsers don't scroll a PARTLY visible field on focus; show the whole
+                // reply box (minimal scroll). Not a message scroll — those have one owner.
+                onFocus={() => formRef.current?.scrollIntoView?.({ block: "nearest" })}
                 placeholder="Describe the problem…"
                 aria-invalid={inputError ? true : undefined}
                 aria-describedby={inputError ? "troubleshooter-input-error" : undefined}
@@ -326,6 +440,12 @@ export function Troubleshooter() {
             {inputError && (
               <p id="troubleshooter-input-error" role="alert" className="mt-1.5 text-[13px] text-alert-300">
                 {inputError}
+              </p>
+            )}
+            {/* RT-002D-R1: why the last input was refused (stale button, too long…). Nothing was recorded. */}
+            {!inputError && rejection && (
+              <p role="status" data-testid="input-rejected" className="mt-1.5 text-[13px] text-caution-300">
+                {rejection}
               </p>
             )}
           </form>
@@ -347,14 +467,14 @@ export function Troubleshooter() {
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "notice") {
     return (
-      <li className="animate-fade-up self-center rounded-full border border-ink-700 bg-ink-850 px-3 py-1 text-center text-[13px] text-ink-300">
+      <li data-role="notice" className="animate-fade-up self-center rounded-full border border-ink-700 bg-ink-850 px-3 py-1 text-center text-[13px] text-ink-300">
         {message.text}
       </li>
     );
   }
   const assistant = message.role === "assistant";
   return (
-    <li className={cn("animate-fade-up flex max-w-[92%] flex-col gap-1", assistant ? "self-start" : "self-end items-end")}>
+    <li data-role={message.role} className={cn("animate-fade-up flex max-w-[92%] flex-col gap-1", assistant ? "self-start" : "self-end items-end")}>
       <span className="font-mono text-[10px] font-medium tracking-[0.12em] text-ink-400 uppercase">
         {assistant ? "Troubleshooter (prototype)" : "You"}
       </span>

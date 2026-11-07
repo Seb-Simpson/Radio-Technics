@@ -11,7 +11,7 @@ import { understand } from "@/lib/troubleshooter/understand";
 
 const ctx = { selectedEquipmentId: null };
 const type = (s: ConversationState, text: string) => respond(s, { type: "text", text }, ctx).state;
-const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId }, ctx).state;
+const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId, instanceId: s.instance }, ctx).state;
 const at = (s: ConversationState) => (s.step.kind === "node" ? s.step.nodeId : s.step.kind);
 const answersTo = (s: ConversationState, question: string) => s.answers.filter((a) => a.question === question);
 
@@ -42,10 +42,17 @@ describe("1. question-aware answers", () => {
     ["hear-on-air", "No, there's sound, but the mic is missing", "No, there is sound but something is missing"],
     ["mic-headphones", "Nope, I can't hear anything", "No, I can't hear anything"],
   ])("on %s: %j → %s", (nodeId, text, expected) => {
+    // RT-002D: these are safety-relevant questions, so the typed reply is
+    // interpreted and PROPOSED, never recorded until the presenter confirms it.
     const s = type(onNode(nodeId), text);
-    const recorded = answersTo(s, prompt(nodeId));
+    expect(answersTo(s, prompt(nodeId))).toEqual([]);
+    expect(s.step).toMatchObject({ kind: "check", nodeId });
+    const proposed = describeStep(s).options[0]!;
+    expect(proposed.label).toBe(expected);
+    const confirmed = press(s, proposed.id);
+    const recorded = answersTo(confirmed, prompt(nodeId));
     expect(recorded.map((a) => a.answer)).toEqual([expected]);
-    expect(recorded[0]).toMatchObject({ source: "typed", typedText: text });
+    expect(recorded[0]).toMatchObject({ source: "confirmed-interpretation", typedText: text });
   });
 
   it.each([
@@ -108,8 +115,10 @@ describe("1. question-aware answers", () => {
 
   it("confirmation questions handle self-correction and conflict", () => {
     const start = type(createConversation(), "The green thing isn't working");
-    expect(type(start, "Yes — sorry, no, it's something else").step).toMatchObject({ kind: "choose" });
-    expect(type(start, "no, actually yes").step).toMatchObject({ kind: "node", nodeId: "gb-screen" });
+    // RT-002D-R1: typed replies never answer the identity question; only the buttons do.
+    expect(type(start, "Yes — sorry, no, it's something else").answers).toEqual(start.answers);
+    expect(type(start, "no, actually yes").answers).toEqual(start.answers);
+    expect(type(start, "no, actually yes").step).toMatchObject({ kind: "confirm" });
     const conflicted = type(start, "yes no");
     expect(conflicted.step).toEqual(start.step);
     expect(conflicted.answers).toEqual(start.answers);

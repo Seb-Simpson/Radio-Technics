@@ -9,7 +9,6 @@ import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { Troubleshooter } from "@/components/troubleshooter/Troubleshooter";
 import { EXPIRY_CHECK_INTERVAL_MS } from "@/lib/troubleshooter/TroubleshooterProvider";
 import { SESSION_KEY, SESSION_MAX_IDLE_MS, isSessionExpired, saveSession } from "@/lib/session/storage";
-import { createConversation, respond } from "@/lib/troubleshooter/engine";
 import { renderWithProviders } from "./render";
 
 const T0 = 1_900_000_000_000;
@@ -133,9 +132,8 @@ describe("idle expiry in an open tab", () => {
   });
 
   it("restoring a session does not renew it", async () => {
-    let conversation = createConversation();
-    conversation = respond(conversation, { type: "text", text: "dead air" }, { selectedEquipmentId: null }).state;
-    saveSession(window.sessionStorage, conversation, { selectedEquipmentId: "green-next-button", activeViewId: null }, T0 - (SESSION_MAX_IDLE_MS - MINUTE));
+    const events = [{ input: { type: "text" as const, text: "dead air" }, selectedEquipmentId: null }];
+    saveSession(window.sessionStorage, events, { selectedEquipmentId: "green-next-button", activeViewId: null }, T0 - (SESSION_MAX_IDLE_MS - MINUTE));
     renderWithProviders(<Troubleshooter />, { clock });
     expect(await within(log()).findByText("dead air")).toBeInTheDocument();
     expect(stored()?.lastActivityAt).toBe(T0 - (SESSION_MAX_IDLE_MS - MINUTE));
@@ -148,9 +146,8 @@ describe("idle expiry in an open tab", () => {
   });
 
   it("an expired saved session is reported on load and never shown", async () => {
-    let conversation = createConversation();
-    conversation = respond(conversation, { type: "text", text: "dead air" }, { selectedEquipmentId: null }).state;
-    saveSession(window.sessionStorage, conversation, { selectedEquipmentId: null, activeViewId: null }, T0 - SESSION_MAX_IDLE_MS - 1);
+    const events = [{ input: { type: "text" as const, text: "dead air" }, selectedEquipmentId: null }];
+    saveSession(window.sessionStorage, events, { selectedEquipmentId: null, activeViewId: null }, T0 - SESSION_MAX_IDLE_MS - 1);
     renderWithProviders(<Troubleshooter />, { clock });
     expect(await screen.findByTestId("expired-notice")).toBeInTheDocument();
     expect(within(log()).queryByText("dead air")).not.toBeInTheDocument();

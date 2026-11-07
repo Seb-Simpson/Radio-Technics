@@ -38,6 +38,7 @@ export const defaultContent: ContentBundle = {
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STATUSES: readonly VerificationStatus[] = ["verified", "manufacturer-documented", "station-reported", "draft"];
 const AUDIO_CLAIMS: readonly AudioClaim[] = ["present", "absent"];
+const ASSERT_SUBJECTS: readonly string[] = ["movement", "worked-earlier", "found"];
 /** Values that look like an entry but carry no information. */
 const PLACEHOLDER = /^(tbc|tbd|tba|unknown|n\/?a|none|nil|null|test|testing|todo|pending|placeholder|see above|same|various|misc|other|x+|\?+|-+|\.+|engineer|the engineer|station engineer|staff|someone|me)$/i;
 
@@ -278,6 +279,21 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
       if (option.audio !== undefined && !AUDIO_CLAIMS.includes(option.audio)) {
         add("flows", [`${node.id} option "${option.id}" has unknown audio claim "${String(option.audio)}"`]);
       }
+      // RT-002D answer schema.
+      if (option.asserts !== undefined) {
+        if (!ASSERT_SUBJECTS.includes(option.asserts.subject) || typeof option.asserts.value !== "boolean") {
+          add("flows", [`${node.id} option "${option.id}" has an invalid assertion`]);
+        }
+        if (option.audio !== undefined) add("flows", [`${node.id} option "${option.id}" asserts about sound twice (audio and asserts)`]);
+      }
+      if (option.restate !== undefined && (typeof option.restate !== "string" || option.restate.trim().length < 5)) {
+        add("flows", [`${node.id} option "${option.id}" has an empty restatement`]);
+      }
+    }
+    if (node.kind === "question") {
+      // Two options making the same claim would make interpretations ambiguous.
+      const claims = node.options.map((o) => (o.audio ? `sound:${o.audio}` : o.asserts ? `${o.asserts.subject}:${o.asserts.value}` : null)).filter(Boolean);
+      if (new Set(claims).size !== claims.length) add("flows", [`${node.id} has two options making the same claim`]);
     }
     if (node.kind === "question") {
       if (!node.unsureNext) add("flows", [`${node.id} has no "I'm not sure" route`]);

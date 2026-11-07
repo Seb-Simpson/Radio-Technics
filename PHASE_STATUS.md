@@ -205,3 +205,13 @@ Manual checks:
 
 **Status:** Priority 1–3 findings addressed with regression tests; see `docs/RT-002C-REMEDIATION.md` for causes, before/after evidence and full results. The unredacted rack photo is **still reachable through GitHub's `refs/pull/2/head`** and possibly old Vercel previews. The owner needs to contact GitHub Support and Vercel (`docs/SECURITY-PHOTO-EXPOSURE.md`).
 **Branch:** `fix/rt-002c-qa002b` from `2ae5b26`. Not merged, not deployed.
+
+## RT-002D — Diagnostic safety architecture (RT-QA-002C remediation)
+
+**Status:** All RT-QA-002C reproductions corrected and covered by permanent tests; see `docs/RT-002D-REPORT.md`. The architecture now separates observation, interpretation, confirmation, broadcast safety and authorised actions. Tested by the development team only; not yet independently re-audited; not tested on physical devices.
+**Branch:** `fix/rt-002d-diagnostic-safety` from `79eb0b0`. Not merged, not deployed.
+
+## RT-002D-R1 — Safety enforcement remediation (RT-QA-002D)
+
+**Status:** All RT-QA-002D findings quoted in the brief corrected and covered by tests; see `docs/RT-002D-R1-REPORT.md`. One answer path (displayed option + active question instance), incident model, explicit urgent/resumed controls, corrections, identifier-only AI contract, Knowledge Centre safety hand-off. **Not independently audited**; not tested on physical devices.
+**Branch:** `fix/rt-002d-diagnostic-safety` (PR #6). Not merged, not deployed.

@@ -180,3 +180,25 @@ describe("workspace commands", () => {
     expect(validateWorkspaceCommand(command).ok).toBe(false);
   });
 });
+
+describe("RT-002D answer schemas", () => {
+  it("rejects an invalid assertion, a double sound claim, an empty restatement and duplicate claims", () => {
+    const nodes = structuredClone(defaultContent.flowNodes);
+    const meters = nodes.find((n) => n.id === "mic-meters")!;
+    meters.options[0]!.asserts = { subject: "sparkles" as never, value: true };
+    meters.options[1]!.restate = " ";
+    const playing = nodes.find((n) => n.id === "gb-current-song")!;
+    playing.options[0]!.asserts = { subject: "movement", value: true };
+    const since = nodes.find((n) => n.id === "mic-since")!;
+    since.options[1]!.asserts = { subject: "worked-earlier", value: true };
+    const messages = validateContent({ ...defaultContent, flowNodes: nodes }, NOW).map((i) => i.message).join("\n");
+    expect(messages).toMatch(/mic-meters option "move" has an invalid assertion/);
+    expect(messages).toMatch(/mic-meters option "still" has an empty restatement/);
+    expect(messages).toMatch(/gb-current-song option "yes" asserts about sound twice/);
+    expect(messages).toMatch(/mic-since has two options making the same claim/);
+  });
+
+  it("the real flows pass", () => {
+    expect(validateContent(defaultContent, NOW)).toEqual([]);
+  });
+});

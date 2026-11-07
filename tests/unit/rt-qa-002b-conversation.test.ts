@@ -13,7 +13,7 @@ import { understand } from "@/lib/troubleshooter/understand";
 
 const ctx = { selectedEquipmentId: null };
 const type = (s: ConversationState, text: string) => respond(s, { type: "text", text }, ctx).state;
-const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId }, ctx).state;
+const press = (s: ConversationState, optionId: string) => respond(s, { type: "option", optionId, instanceId: s.instance }, ctx).state;
 const at = (s: ConversationState) => (s.step.kind === "node" ? s.step.nodeId : s.step.kind);
 const fresh = (text: string) => type(createConversation(), text);
 
@@ -84,10 +84,11 @@ describe("1. questions, hypotheticals, uncertainty and denials are never confirm
     expect(at(s)).toBe(node);
   });
 
-  it("an uncertain observation is recorded as 'not sure', never as the observation (baseline: confirmed)", () => {
-    const { recorded } = reply("mic-headphones", "Maybe I can hear other sounds");
-    expect(recorded).toHaveLength(1);
-    expect(recorded[0]).toMatchObject({ answer: "I'm not sure", certainty: "uncertain" });
+  it("an uncertain observation is never recorded as the observation (baseline: confirmed)", () => {
+    // RT-002D-R1: typed text records nothing at all; the presenter is pointed to "I'm not sure".
+    const { s, recorded } = reply("mic-headphones", "Maybe I can hear other sounds");
+    expect(recorded).toEqual([]);
+    expect(s.messages.some((m) => /choose “I'm not sure”/.test(m.text))).toBe(true);
   });
 
   it("uncertain silence is checked, not recorded", () => {
@@ -139,8 +140,11 @@ describe("2. polite words after an off-air report don't retract it", () => {
   });
 
   it("existing corrections still work: 'Yes, no, sorry it is not playing'", () => {
-    const { recorded } = reply("gb-current-song", "Yes, no, sorry it is not playing");
-    expect(recorded[0]?.answer).toBe("No — there's silence");
+    // RT-002D: proposed for confirmation, then recorded.
+    const { s, recorded } = reply("gb-current-song", "Yes, no, sorry it is not playing");
+    expect(recorded).toEqual([]);
+    expect(describeStep(s).options[0]?.label).toBe("No — there's silence");
+    expect(press(s, describeStep(s).options[0]!.id).answers.at(-1)?.answer).toBe("No — there's silence");
   });
 });
 
@@ -189,7 +193,7 @@ describe("4. a yes/no prefix never overrides the rest of the sentence", () => {
     const { s, recorded } = reply(node, text);
     expect(recorded).toEqual([]);
     expect(at(s)).toBe(node);
-    expect(s.messages.some((m) => /won't record an answer yet/.test(m.text))).toBe(true);
+    expect(s.messages.some((m) => /(won't|haven't) record(ed)? an answer/.test(m.text))).toBe(true);
   });
 
   it.each([
@@ -199,7 +203,16 @@ describe("4. a yes/no prefix never overrides the rest of the sentence", () => {
     ["mic-since", "No", "No, it hasn't worked today"],
     ["mic-headphones", "Yes, but not my own voice", "Yes, I can hear other sounds"],
   ])("consistent replies still work: %s %j", (node, text, answer) => {
-    expect(reply(node, text).recorded[0]?.answer).toBe(answer);
+    // Recorded directly (exact label or bare yes/no), or — for descriptive
+    // replies to safety-relevant questions — proposed and then confirmed (RT-002D).
+    const { s, recorded } = reply(node, text);
+    if (s.step.kind === "check") {
+      expect(recorded).toEqual([]);
+      expect(describeStep(s).options[0]?.label).toBe(answer);
+      expect(press(s, describeStep(s).options[0]!.id).answers.at(-1)?.answer).toBe(answer);
+    } else {
+      expect(recorded[0]?.answer).toBe(answer);
+    }
   });
 
   it("'Yes, it's the guest mic' while confirming another item asks which (baseline: confirmed the wrong item)", () => {

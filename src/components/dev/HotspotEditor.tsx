@@ -1,5 +1,6 @@
 "use client";
 
+import { withBasePath } from "@/lib/base-path";
 import { Check, Copy, Crosshair, ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { PhotoViewer } from "@/components/studio/PhotoViewer";
@@ -349,7 +350,7 @@ export function HotspotEditor({ views, hotspots }: Props) {
               style={{ aspectRatio: `${view.width} / ${view.height}`, maxHeight: "70vh", maxWidth: "100%" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- editor shows the raw file */}
-              <img src={view.src} alt={view.alt} draggable={false} className="pointer-events-none size-full object-contain" />
+              <img src={view.src?.startsWith("blob:") ? view.src : withBasePath(view.src ?? "")} alt={view.alt} draggable={false} className="pointer-events-none size-full object-contain" />
               {drafts.map((d) => {
                 const errors = errorsByKey.get(d.key) ?? [];
                 const isSelected = d.key === selectedKey;

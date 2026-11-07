@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { hotspots as defaultHotspots } from "@/data/hotspots";
+import { withBasePath } from "@/lib/base-path";
 import { EXPECTED_PHOTO_COUNT } from "@/data/studio-views";
 import { Notice } from "@/components/ui/Notice";
 import { buttonStyles } from "@/components/ui/button-styles";
@@ -295,7 +296,7 @@ function ViewTabs({
           >
             {view.kind === "photo" && view.src ? (
               // eslint-disable-next-line @next/next/no-img-element -- small static thumbnails
-              <img src={view.src} alt="" loading="lazy" className="h-12 w-full rounded object-cover" />
+              <img src={withBasePath(view.src)} alt="" loading="lazy" className="h-12 w-full rounded object-cover" />
             ) : (
               <span aria-hidden className="h-12 w-full rounded bg-ink-750" />
             )}

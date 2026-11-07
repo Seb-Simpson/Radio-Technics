@@ -2,6 +2,7 @@
 
 import { ImageOff, Minus, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { withBasePath } from "@/lib/base-path";
 import { getEquipmentById } from "@/lib/content/equipment";
 import { cn } from "@/lib/cn";
 import type { Hotspot, HotspotRegion, StudioView } from "@/types";
@@ -431,7 +432,7 @@ export function PhotoViewer({
             <img
               ref={imageRef}
               key={view.id}
-              src={view.src}
+              src={withBasePath(view.src)}
               alt={view.alt}
               draggable={false}
               onError={() => setImageFailed(true)}

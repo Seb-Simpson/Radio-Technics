@@ -46,7 +46,10 @@ export const MAX_INPUT_LENGTH = 500;
 const URGENT_NODE = "outcome-urgent";
 const ON_AIR_CHECK_NODE = "hear-on-air";
 const HEARING_NODE = "hear-where";
-const HEARING_NODES = new Set(["hear-where", "hear-headphones", "hear-speakers", "hear-on-air", "hear-meters", "mic-headphones"]);
+const HEARING_NODES = new Set([
+  "hear-where", "hear-headphones", "hear-speakers", "hear-on-air", "hear-meters", "mic-headphones",
+  "hp-start", "hp-on-air", "hp-meters", "hp-missing", "hp-ears", "hp-whose", "hp-since",
+]);
 
 export const UNIVERSAL_OPTIONS: StepOption[] = [
   { id: "u-unsure", label: "I'm not sure", kind: "universal" },

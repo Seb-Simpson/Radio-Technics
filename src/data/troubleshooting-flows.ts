@@ -201,6 +201,95 @@ export const flowNodes: FlowNode[] = [
     unsureNext: "outcome-report",
   },
 
+  /* ---------------- Headphones ---------------- */
+  // Information gathering only: the station hasn't confirmed which controls
+  // set headphone volume or what the GUEST HPH / H/P AMP controls do, so no
+  // node tells the presenter to adjust anything.
+  {
+    id: "hp-start",
+    kind: "question",
+    prompt: "What's the problem with the headphones?",
+    help: "The station hasn't confirmed which controls set headphone volume, so please don't adjust controls you're unsure about — especially while on air.",
+    showEquipmentId: "headphone-monitoring",
+    options: [
+      { id: "nothing", label: "I can't hear anything in them", next: "hp-on-air", audio: "absent", match: ["nothing at all", "can't hear anything", "cant hear anything"], restate: "you can't hear anything in the headphones" },
+      { id: "some", label: "I can hear some sounds, but not everything", next: "hp-missing", audio: "present", match: ["some sounds", "not everything"], restate: "you can hear some sounds in the headphones, but not everything" },
+      { id: "volume", label: "They're too loud or too quiet", next: "hp-whose", match: ["too loud", "too quiet", "volume"], restate: "the headphones are too loud or too quiet" },
+      { id: "wrong", label: "It sounds crackly, buzzing or distorted", next: "hp-ears", match: ["crackly", "crackling", "buzzing", "buzz", "distorted", "hum", "humming"], restate: "the sound in the headphones is crackly, buzzing or distorted" },
+    ],
+    unsureNext: "hp-on-air",
+  },
+  {
+    id: "hp-on-air",
+    kind: "question",
+    broadcastCheck: true,
+    prompt: "Could the station be silent on air too, not just in the headphones?",
+    options: [
+      { id: "yes", label: "Yes, it might be silent on air", next: "outcome-urgent", answer: "yes", audio: "absent", restate: "the station might be silent on air right now" },
+      { id: "no", label: "No, it's only the headphones", next: "hp-meters", answer: "no", match: ["only the headphones", "only headphones"], restate: "only the headphones are affected, not what listeners hear" },
+    ],
+    unsureNext: "outcome-urgent",
+  },
+  {
+    id: "hp-meters",
+    kind: "question",
+    prompt: "While audio should be playing, do the level meters move?",
+    help: "Level meters are the bars or lights that bounce up and down when there is sound.",
+    showEquipmentId: "audio-level-meters",
+    options: [
+      { id: "move", label: "Yes, they move", asserts: { subject: "movement", value: true }, restate: "the level meters are moving", next: "hp-whose", answer: "yes", match: ["they move", "moving"] },
+      { id: "still", label: "No, they don't move", asserts: { subject: "movement", value: false }, restate: "the level meters aren't moving", next: "hp-whose", answer: "no", match: ["don't move", "not moving"] },
+    ],
+    unsureNext: "hp-whose",
+  },
+  {
+    id: "hp-missing",
+    kind: "question",
+    prompt: "What can't you hear in the headphones?",
+    showEquipmentId: "headphone-monitoring",
+    options: [
+      { id: "own-voice", label: "My own voice", next: "hp-whose", match: ["my voice", "own voice", "myself"], restate: "you can't hear your own voice" },
+      { id: "music", label: "The music or other playout", next: "hp-whose", match: ["music", "songs", "playout", "myriad"], restate: "you can't hear the music or other playout" },
+      { id: "guest", label: "A guest or caller", next: "hp-whose", match: ["guest", "caller", "zoom"], restate: "you can't hear a guest or caller" },
+      { id: "other", label: "Something else", next: "hp-whose", match: ["something else", "other"] },
+    ],
+    unsureNext: "hp-whose",
+  },
+  {
+    id: "hp-ears",
+    kind: "question",
+    prompt: "Is the problem in both ears, or only one?",
+    showEquipmentId: "headphone-monitoring",
+    options: [
+      { id: "both", label: "Both ears", next: "hp-whose", match: ["both"], restate: "the problem is in both ears" },
+      { id: "one", label: "Only one ear", next: "hp-whose", match: ["one ear", "one side", "left", "right"], restate: "the problem is only in one ear" },
+    ],
+    unsureNext: "hp-whose",
+  },
+  {
+    id: "hp-whose",
+    kind: "question",
+    prompt: "Whose headphones are affected?",
+    showEquipmentId: "headphone-monitoring",
+    options: [
+      { id: "mine", label: "Only mine", next: "hp-since", match: ["only mine", "just mine", "my headphones"], restate: "only your headphones are affected" },
+      { id: "guest", label: "Only a guest's", next: "hp-since", match: ["guest"], restate: "only a guest's headphones are affected" },
+      { id: "everyone", label: "Everyone's in the studio", next: "hp-since", match: ["everyone", "everybody", "all of them"], restate: "everyone's headphones in the studio are affected" },
+    ],
+    unsureNext: "hp-since",
+  },
+  {
+    id: "hp-since",
+    kind: "question",
+    prompt: "Were the headphones working normally earlier today?",
+    showEquipmentId: "headphone-monitoring",
+    options: [
+      { id: "yes", label: "Yes, they were working earlier", asserts: { subject: "worked-earlier", value: true }, restate: "the headphones were working earlier today", next: "outcome-report", answer: "yes", match: ["working earlier", "were working"] },
+      { id: "no", label: "No, they haven't worked today", asserts: { subject: "worked-earlier", value: false }, restate: "the headphones haven't worked today", next: "outcome-report", answer: "no", match: ["not worked", "haven't worked"] },
+    ],
+    unsureNext: "outcome-report",
+  },
+
   /* ---------------- Cables ---------------- */
   {
     id: "cable-where",
@@ -282,6 +371,12 @@ export const troubleshootingTopics: TroubleshootingTopic[] = [
     label: "I can't hear anything",
     description: "Nothing in headphones or speakers.",
     utterance: "I can't hear anything",
+  },
+  {
+    id: "topic-headphones",
+    label: "My headphones aren't working",
+    description: "Silent, missing sounds, wrong volume or crackly.",
+    utterance: "My headphones aren't working",
   },
   {
     id: "topic-not-responding",

@@ -1,5 +1,16 @@
 # Phase Status
 
+## Headphones troubleshooting flow
+
+**Status:** Implemented and tested. Information gathering only; no fixes are prescribed (no verified procedure exists).
+
+- New nodes `hp-start` → `hp-on-air` / `hp-missing` / `hp-ears` → `hp-meters` → `hp-whose` → `hp-since` → `outcome-report`. Covers silence, missing sounds, volume, and crackly/distorted sound.
+- Silent headphones first ask whether the station could be silent on air. "Yes" or "I'm not sure" leads to `outcome-urgent`.
+- `headphone-monitoring` now enters at `hp-start`. A new common problem, "My headphones aren't working", has been added. The "I can't hear anything" flow is unchanged.
+- The `hp-*` nodes are hearing nodes, so typing "I can't hear anything" no longer restarts at "Where are you trying to hear the sound?". `ENGINE_VERSION` is now `rt-002d-r1.2`.
+- Tests: `tests/unit/headphones-flow.test.ts`. `npm run check`: 23 files, 680 tests passed, build passed. `npm run test:e2e`: 309 passed, 181 skipped.
+- Engineer to confirm: which control sets each headphone's volume, and what GUEST HPH and H/P AMP do (already in `requiresVerification`).
+
 ## RT-003 — Knowledge base & intelligent search foundation
 
 **Status:** Implemented and tested. Official Myriad documentation could **not** be read (network policy blocked `www.broadcastradio.com` and `help.broadcastradio.com`); sources are listed as "not yet read" and no manufacturer content was written. Nothing is engineer-verified.

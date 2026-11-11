@@ -292,7 +292,7 @@ export const equipment: EquipmentRecord[] = [
     ],
     aliases: ["headphone monitoring", "headphones", "headphone", "headset", "cans", "earphones"],
     relatedArticleIds: ["ts-cant-hear-anything"],
-    flowEntryNodeId: "hear-headphones",
+    flowEntryNodeId: "hp-start",
   },
   {
     id: "studio-monitor-speakers",

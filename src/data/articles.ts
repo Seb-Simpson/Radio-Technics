@@ -228,12 +228,7 @@ export const articles: KnowledgeArticle[] = [
     relatedArticleIds: ["kb-myriad-next-item", "kb-myriad-live-assist", "guide-green-button"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["live-assist", "log", "dead-air"],
-    revisions: [RT001, RT003, fromManual("Added a short answer and what the manual says about how Myriad moves on.")],
-    quickAnswer: {
-      text: "The manual says an item set to Stop waits at its end until Go is pressed. Whether that explains this at the station is not confirmed.",
-      status: "manufacturer-documented",
-      sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
-    },
+    revisions: [RT001, RT003, fromManual("Added what the manual says about how Myriad moves on. No quick answer: the silence guidance leads this article.")],
     sections: [
       {
         heading: "If there is silence on air",
@@ -861,7 +856,7 @@ export const articles: KnowledgeArticle[] = [
       "Which source is assigned to each fader at this station.",
       "Which controls presenters are expected to use, and which should be left alone.",
     ],
-    sources: [SOURCES.photoConsole, SOURCES.axiaIq, SOURCES.developmentTeam],
+    sources: [SOURCES.photoConsole, SOURCES.axiaIq, SOURCES.axiaIqManual, SOURCES.axiaIqQuickStart, SOURCES.developmentTeam],
     relatedArticleIds: ["guide-studio-overview"],
     relatedTopicIds: [],
     glossaryTermIds: ["fader"],
@@ -915,7 +910,7 @@ export const articles: KnowledgeArticle[] = [
     symptoms: ["What is the Axia unit in the rack?", "What does the QOR.16 do?"],
     diagnosticQuestions: [],
     openQuestions: [
-      "Whether this QOR.16 serves the console in the photograph. Axia's page lists the QOR.16 for Radius, DESQ and RAQ consoles, and its iQ page names a different engine (StudioCore) for iQ, so the pairing at this station is not known.",
+      "Whether this QOR.16 serves the console in the photograph. Axia's QOR.16 page lists it for Radius, DESQ and RAQ consoles, mentions iQ in its FAQ (a cable length question and a telephone hybrid question) and links the iQ manual, while the iQ page names StudioCore as iQ's engine. Which engine this studio's iQ uses is not confirmed.",
       "What the front-panel display normally shows at this station.",
       "What the unit does in this studio and whether presenters should ever touch it.",
     ],
@@ -991,7 +986,7 @@ export const articles: KnowledgeArticle[] = [
         body: [
           "The manual describes the xNode2 as a family of half-rack units that convert between line-level audio, AES3 digital audio, microphone inputs or control signals (GPIO) and audio over a network (AoIP).",
           "There are five models: analog, AES3, microphone, GPIO and mixed signal. They differ in their connections at the back.",
-          "All models have a mains connection and two network ports at the back, and the manual says the top network port can also supply power.",
+          "All models have a mains connection and two network ports at the back, and the manual says the top network port can also power the unit (PoE+).",
           "This describes the product in general. It does not say how this station uses it.",
         ],
       },
@@ -1031,7 +1026,7 @@ export const articles: KnowledgeArticle[] = [
       "Whether the speakers mute automatically when a microphone is live. Behringer's page describes no such feature.",
       "Behringer's page describes a small personal monitor pair \u201cideally suited for home studios\u201d, but the station's photograph shows wall-mounted speakers. Whether these are the same product is not confirmed.",
     ],
-    sources: [SOURCES.photoMonitorSpeaker, SOURCES.behringerMs16, SOURCES.developmentTeam],
+    sources: [SOURCES.photoMonitorSpeaker, SOURCES.behringerMs16, SOURCES.behringerMs16QuickStart, SOURCES.behringerMs16Manual, SOURCES.developmentTeam],
     relatedArticleIds: ["ts-cant-hear-anything"],
     relatedTopicIds: [],
     glossaryTermIds: [],

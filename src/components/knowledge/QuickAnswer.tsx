@@ -29,8 +29,8 @@ export function QuickAnswer({ article, headingLevel = 2 }: { article: KnowledgeA
       </div>
       <p className="mt-2 text-[17px] leading-relaxed text-ink-50">{quick.text}</p>
       {manual && href && (
-        <p className="mt-3">
-          <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[15px] font-medium text-signal-300 underline underline-offset-2">
+        <p className="mt-1">
+          <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 py-2 text-[15px] font-medium text-signal-300 underline underline-offset-2">
             Read the original
             <ExternalLink aria-hidden className="size-3.5" />
             <span className="sr-only">(opens in a new tab)</span>

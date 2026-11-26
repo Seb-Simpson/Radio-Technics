@@ -39,10 +39,10 @@ Short answers on these articles are labelled "From the ... manual" (or "product 
 - **Green button or Go:** the manual describes Myriad's own Go control. Is the green button the same thing, or something else wired to Myriad? Until answered, Radio Technics does not say they are the same.
 - **Stop chains:** are stop chains in use in this studio's logs, and how should a presenter tell a deliberate stop from a fault?
 - **MS16:** the product page describes a small powered stereo speaker pair. The photograph label and the wall mounting do not obviously match it. Confirm the model, how many there are, and what is connected.
-- **QOR.16 and the iQ console:** Axia lists the QOR.16 for other consoles and names a different engine for the iQ. Is the QOR.16 in the rack the one serving the console labelled iQ?
+- **QOR.16 and the iQ console:** Axia's QOR.16 page lists it for Radius, DESQ and RAQ consoles but also mentions iQ in its FAQ and links the iQ manual, while the iQ page names StudioCore as iQ's engine. Does this studio's iQ use a QOR.16, and is the QOR.16 in the rack the one serving the console labelled iQ?
 - **xNode2 variant:** the rack label says only X-NODE 2. The manual covers five models (analog, AES3, microphone, GPIO, mixed signal). Which one is it?
 - **Normal and fault indicators:** what the Myriad dashboard, the QOR.16 display, the xNode2 screen and the iQ displays look like normally, and when something is wrong.
-- **Unread PDFs:** the Axia iQ User Manual and Quick Start Guide, the QOR.16 manual, the rest of the xNode2 manual, and the Behringer MS16 Quick Start Guide and User Manual were not read (the MS16 ones are on a site we could not reach). Please supply them or confirm they can be read.
+- **Unread PDFs:** the Axia iQ User Manual and Quick Start Guide, the rest of the xNode2 manual, and the Behringer MS16 Quick Start Guide and User Manual were not read (the MS16 ones are on a site we could not reach; the iQ ones are on a file host Radio Technics could not read; the QOR.16 page links no manual of its own). Please supply them or confirm they can be read.
 - Nothing above has been engineer-verified. Short answers are manufacturer-documented at best; station-specific statements stay drafts or station-reported.
 
 ## Myriad documentation (earlier note)

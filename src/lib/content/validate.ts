@@ -247,6 +247,8 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
     const quick = article.quickAnswer;
     if (quick) {
       const qa = `${article.id} quick answer`;
+      if (!quick.text.trim()) a([`${qa} has no text`]);
+      if (quick.sourceIds.length === 0) a([`${qa} cites no source`]);
       if (quick.text.trim().split(/\s+/).filter(Boolean).length > QUICK_ANSWER_MAX_WORDS) {
         a([`${qa} is longer than ${QUICK_ANSWER_MAX_WORDS} words`]);
       }

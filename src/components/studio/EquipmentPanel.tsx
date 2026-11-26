@@ -8,7 +8,7 @@ import { VerificationBadge } from "@/components/ui/VerificationBadge";
 import { getCategory, getEquipmentById } from "@/lib/content/equipment";
 import { SourceLabel } from "@/components/knowledge/SourceLabel";
 import { manualLabel } from "@/lib/knowledge/manual-label";
-import { getArticleById, getArticlesForEquipment } from "@/lib/knowledge/search";
+import { getArticleById } from "@/lib/knowledge/search";
 import type { Hotspot } from "@/types";
 
 export interface EquipmentPanelProps {
@@ -22,6 +22,9 @@ export interface EquipmentPanelProps {
   /** The hotspot for this equipment in the photo on screen, if any. */
   photoHotspot?: Hotspot | null;
 }
+
+/** The panel is a quick glance; the Knowledge Centre holds the rest. */
+const MAX_MANUAL_ANSWERS = 3;
 
 export function EquipmentPanel({
   equipmentId,
@@ -66,15 +69,18 @@ export function EquipmentPanel({
     const article = getArticleById(id);
     return article ? [article] : [];
   });
-  // Related by either direction of the link; only manual-backed quick answers are listed.
-  const manualArticles = [...articles, ...getArticlesForEquipment(record.id)]
-    .filter((a, i, all) => all.findIndex((b) => b.id === a.id) === i)
-    .flatMap((article) => {
-      const source = article.quickAnswer?.sourceIds
-        .flatMap((id) => article.sources.filter((s) => s.id === id))
-        .find((s) => manualLabel(s) !== null);
-      return article.quickAnswer && source ? [{ article, source }] : [];
-    });
+  // Only the record's own links; manual-backed quick answers only, at most MAX_MANUAL_ANSWERS.
+  const allManual = articles.flatMap((article) => {
+    const source = article.quickAnswer?.sourceIds
+      .flatMap((id) => article.sources.filter((s) => s.id === id))
+      .find((s) => manualLabel(s) !== null);
+    return article.quickAnswer && source ? [{ article, source }] : [];
+  });
+  const manualArticles = allManual.slice(0, MAX_MANUAL_ANSWERS);
+  const hasMoreManual = allManual.length > MAX_MANUAL_ANSWERS;
+  // An article already shown with its quick answer is not repeated under "Related guides".
+  const shownIds = new Set(manualArticles.map(({ article }) => article.id));
+  const relatedGuides = articles.filter((article) => !shownIds.has(article.id));
 
   return (
     <section aria-labelledby="equipment-panel-title" className="animate-fade-up flex flex-col" key={record.id}>
@@ -161,13 +167,18 @@ export function EquipmentPanel({
                 </li>
               ))}
             </ul>
+            {hasMoreManual && (
+              <Link href="/knowledge" className="mt-2 -mx-2 inline-flex min-h-11 items-center rounded-md px-2 text-[15px] font-medium text-signal-300 underline underline-offset-2">
+                More in the Knowledge Centre
+              </Link>
+            )}
           </PanelSection>
         )}
 
-        {articles.length > 0 && (
+        {relatedGuides.length > 0 && (
           <PanelSection icon={<BookOpen aria-hidden className="size-4" />} title="Related guides">
             <ul className="flex flex-col gap-1">
-              {articles.map((article) => (
+              {relatedGuides.map((article) => (
                 <li key={article.id}>
                   <Link
                     href={`/knowledge/${article.id}`}

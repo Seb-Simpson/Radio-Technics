@@ -200,7 +200,7 @@ export const equipment: EquipmentRecord[] = [
       "Whether presenters can also advance to the next song from the Myriad screen",
     ],
     aliases: ["myriad", "playout", "playout software", "playlist", "next song", "next track", "song", "songs", "track", "music"],
-    relatedArticleIds: ["ts-next-song-wont-play", "guide-green-button", "kb-myriad-next-item"],
+    relatedArticleIds: ["ts-next-song-wont-play", "guide-green-button", "kb-myriad-next-item", "kb-myriad-live-assist", "kb-myriad-screen", "kb-myriad-stop-chains"],
     flowEntryNodeId: "my-start",
   },
   {

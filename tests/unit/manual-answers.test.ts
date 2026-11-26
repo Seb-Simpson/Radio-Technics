@@ -75,6 +75,40 @@ describe("quick answer validation", () => {
     expect(m.join("\n")).toMatch(/cites a manufacturer source that hasn't been read/);
   });
 
+  it("counts words across any whitespace", () => {
+    const m = withChanges((c) => {
+      const art = c.articles[0]!;
+      art.sources.push({ ...manual });
+      art.quickAnswer = { text: `${words(21)}\n\t ${words(20)}`, status: "manufacturer-documented", sourceIds: ["manual-src"] };
+    });
+    expect(m.join("\n")).toMatch(/quick answer is longer than 40 words/);
+  });
+
+  it("rejects empty text", () => {
+    const m = withChanges((c) => {
+      const art = c.articles[0]!;
+      art.sources.push({ ...manual });
+      art.quickAnswer = { text: "", status: "draft", sourceIds: ["manual-src"] };
+    });
+    expect(m.join("\n")).toMatch(/quick answer has no text/);
+  });
+
+  it("rejects whitespace-only text", () => {
+    const m = withChanges((c) => {
+      const art = c.articles[0]!;
+      art.sources.push({ ...manual });
+      art.quickAnswer = { text: " \n\t ", status: "draft", sourceIds: ["manual-src"] };
+    });
+    expect(m.join("\n")).toMatch(/quick answer has no text/);
+  });
+
+  it("rejects a quick answer that cites no source", () => {
+    const m = withChanges((c) => {
+      c.articles[0]!.quickAnswer = { text: "Short answer.", status: "draft", sourceIds: [] };
+    });
+    expect(m.join("\n")).toMatch(/quick answer cites no source/);
+  });
+
   it("rejects an unknown source", () => {
     const m = withChanges((c) => {
       c.articles[0]!.quickAnswer = { text: "Short answer.", status: "draft", sourceIds: ["nope"] };
@@ -204,12 +238,49 @@ describe("Myriad 6 answers in the articles", () => {
     expect(a.quickAnswer!.text).not.toMatch(/no other dashboard colours/i);
   });
 
-  it("the green button and next-song articles say nothing is confirmed about the button", () => {
+  it("the green button article says nothing is confirmed about the button", () => {
     expect(byId("guide-green-button").quickAnswer!.text).toMatch(/not (yet )?confirmed/i);
-    expect(byId("ts-next-song-wont-play").quickAnswer!.text).toMatch(/not (yet )?confirmed/i);
+  });
+
+  it("the next-song troubleshooting article has no quick answer, so its silence guidance leads", () => {
     const ts = byId("ts-next-song-wont-play");
-    expect(ts.quickAnswer!.text).not.toMatch(/technical support/i);
+    expect(ts.quickAnswer).toBeUndefined();
+    expect(ts.sections[0]!.heading).toBe("If there is silence on air");
     expect(ts.sections.filter((x) => x.status !== "manufacturer-documented").flatMap((x) => x.body).join(" ")).toMatch(/technical support/i);
+  });
+
+  it("the unread manuals are registered as unread manufacturer sources and cited by no manufacturer-documented text", () => {
+    const unread = ["axia-iq-user-manual", "axia-iq-quick-start", "behringer-ms16-quick-start", "behringer-ms16-user-manual"];
+    for (const id of unread) {
+      const src = (Object.values(SOURCES) as SourceReference[]).find((x) => x.id === id);
+      expect(src, id).toBeDefined();
+      expect(src!.kind).toBe("manufacturer");
+      expect(src!.retrievedOn, id).toBeNull();
+      expect(src!.url, id).toMatch(/^https:\/\//);
+      // Listed on an article's sources, so /admin shows it under "Manufacturer sources not yet read".
+      expect(defaultContent.articles.some((a) => a.sources.some((x) => x.id === id)), id).toBe(true);
+      for (const a of defaultContent.articles) {
+        for (const sec of a.sections) {
+          if (sec.status === "manufacturer-documented") expect(sec.sourceIds ?? [], `${a.id}/${sec.heading}`).not.toContain(id);
+        }
+        expect(a.quickAnswer?.sourceIds ?? [], a.id).not.toContain(id);
+      }
+    }
+  });
+
+  it("xNode2 article says the top network port accepts PoE+ power, not that it supplies power", () => {
+    const a = byId("kb-telos-xnode2");
+    const text = a.sections.flatMap((x) => x.body).join(" ");
+    expect(text).toMatch(/top network port can also power the unit \(PoE\+\)/);
+    expect(text).not.toMatch(/supply power/i);
+  });
+
+  it("QOR.16 and iQ notes say the QOR.16 page mentions iQ, and the pairing is unconfirmed", () => {
+    expect(SOURCES.axiaQor16.note).not.toMatch(/does not mention iQ/i);
+    expect(SOURCES.axiaQor16.note).toMatch(/FAQ also mentions iQ/);
+    expect(byId("kb-axia-qor16").openQuestions.join(" ")).toMatch(/mentions iQ in its FAQ/);
+    expect(byId("kb-axia-qor16").relatedArticleIds).not.toContain("kb-axia-iq-console");
+    expect(byId("kb-axia-iq-console").relatedArticleIds).not.toContain("kb-axia-qor16");
   });
 
   it("glossary Myriad terms are no longer described as unread", () => {

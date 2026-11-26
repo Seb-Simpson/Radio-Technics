@@ -41,9 +41,12 @@ export function KnowledgeCentre() {
     [deferredQuery, workspace.selectedEquipmentId, ignoreSelection],
   );
 
-  /** Only the top result shows its quick answer inline; it is never shown for a lower-ranked article. */
+  /** Only the top result shows its quick answer inline; it is never shown for a lower-ranked article.
+   * Urgency comes first: with an urgent or possible-silence query nothing is promoted inline, and the
+   * top article stays in the ordinary grid. */
   const topResult = response.articles[0]?.article;
-  const topWithQuick = topResult?.quickAnswer ? topResult : undefined;
+  const urgentOrSilent = response.safety.urgent || response.safety.possibleSilence;
+  const topWithQuick = topResult?.quickAnswer && !urgentOrSilent ? topResult : undefined;
 
   return (
     <div className="flex flex-col gap-5">

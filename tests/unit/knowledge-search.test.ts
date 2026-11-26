@@ -189,7 +189,8 @@ describe("quick answers found by asking naturally (Phase 1)", () => {
 
   it("results without a quick answer carry none", () => {
     const withoutQuick = search("cable").articles.find((r) => !r.article.quickAnswer);
-    expect(withoutQuick?.quickAnswer).toBeUndefined();
+    expect(withoutQuick).toBeDefined();
+    expect(withoutQuick!.quickAnswer).toBeUndefined();
   });
 
   it("PROGRAM 1 / MONITOR finds only the article that already mentions those labels", () => {

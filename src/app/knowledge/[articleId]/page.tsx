@@ -115,13 +115,13 @@ export default async function ArticlePage({ params }: Props) {
             </Notice>
           )}
 
+          <QuickAnswer article={article} />
+
           {article.symptoms.length > 0 && (
             <Block id="symptoms" title="How presenters might describe this">
               <Bullets items={article.symptoms.map((s) => `“${s}”`)} />
             </Block>
           )}
-
-          <QuickAnswer article={article} />
 
           <div className="flex flex-col gap-6">
             {article.sections.map((section, index) => {

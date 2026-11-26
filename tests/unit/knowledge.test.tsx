@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { EquipmentPanel } from "@/components/studio/EquipmentPanel";
 import { KnowledgeCentre } from "@/components/knowledge/KnowledgeCentre";
 import { articles } from "@/data/articles";
+import { sectionManualSource } from "@/lib/knowledge/manual-label";
 import { getArticlesForEquipment, searchArticles } from "@/lib/knowledge/search";
 import { renderWithProviders } from "./render";
 import { navigation } from "../setup";
@@ -167,5 +168,20 @@ describe("quick answers and manual labels", () => {
 
     render(<EquipmentPanel equipmentId="toaster" onClose={() => {}} />);
     expect(screen.queryByRole("heading", { name: "From the manual" })).toBeNull();
+  });
+});
+
+describe("section manual label", () => {
+  const article = articles.find((a) => a.id === "kb-myriad-live-assist")!;
+  const manualSection = article.sections.find((s) => s.status === "manufacturer-documented")!;
+
+  it("labels a manufacturer-documented section that cites a read manual", () => {
+    expect(sectionManualSource(manualSection, article.sources)?.product).toBe("Myriad 6");
+  });
+
+  it("never labels a station-reported or draft section that cites a manual", () => {
+    for (const status of ["station-reported", "draft"] as const) {
+      expect(sectionManualSource({ ...manualSection, status }, article.sources)).toBeUndefined();
+    }
   });
 });

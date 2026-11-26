@@ -15,7 +15,7 @@ import { getGlossaryTerm } from "@/data/glossary";
 import { troubleshootingTopics } from "@/data/troubleshooting-flows";
 import { getEquipmentById } from "@/lib/content/equipment";
 import { articleKindLabels, articleTypeLabels, sourceKindLabels } from "@/lib/knowledge/labels";
-import { manualLabel } from "@/lib/knowledge/manual-label";
+import { sectionManualSource } from "@/lib/knowledge/manual-label";
 import { getArticleById, getArticles } from "@/lib/knowledge/search";
 
 interface Props {
@@ -75,8 +75,6 @@ export default async function ArticlePage({ params }: Props) {
     const term = getGlossaryTerm(id);
     return term ? [term] : [];
   });
-  const sectionManualSource = (ids: string[] | undefined) =>
-    (ids ?? []).flatMap((id) => article.sources.filter((s) => s.id === id)).find((s) => manualLabel(s) !== null);
   const sourceTitle = (id: string) => article.sources.find((s) => s.id === id)?.title ?? id;
 
   return (
@@ -126,17 +124,16 @@ export default async function ArticlePage({ params }: Props) {
           <QuickAnswer article={article} />
 
           <div className="flex flex-col gap-6">
-            {article.sections.map((section, index) => (
+            {article.sections.map((section, index) => {
+              const manualSource = sectionManualSource(section, article.sources);
+              return (
               <section key={section.heading} aria-labelledby={`section-${index}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 id={`section-${index}`} className="text-lg font-semibold text-ink-50">
                     {section.heading}
                   </h2>
                   <VerificationBadge status={section.status} />
-                  {(() => {
-                    const manual = sectionManualSource(section.sourceIds);
-                    return manual ? <SourceLabel source={manual} /> : null;
-                  })()}
+                  {manualSource && <SourceLabel source={manualSource} />}
                 </div>
                 <div className="mt-2">
                   {section.body.length > 1 ? <Bullets items={section.body} /> : <p className="text-[15px] leading-relaxed text-ink-200">{section.body[0]}</p>}
@@ -145,7 +142,8 @@ export default async function ArticlePage({ params }: Props) {
                   <p className="mt-1.5 text-[12px] text-ink-400">Source: {section.sourceIds.map(sourceTitle).join("; ")}</p>
                 )}
               </section>
-            ))}
+              );
+            })}
           </div>
 
           {article.diagnosticQuestions.length > 0 && (

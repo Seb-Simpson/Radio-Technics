@@ -151,7 +151,7 @@ export function EquipmentPanel({
             <ul className="flex flex-col gap-3">
               {manualArticles.map(({ article, source }) => (
                 <li key={article.id} className="flex flex-col gap-1.5">
-                  <Link href={`/knowledge/${article.id}`} className="text-sm font-medium text-signal-300 underline-offset-2 hover:underline">
+                  <Link href={`/knowledge/${article.id}`} className="-mx-2 block rounded-md px-2 py-1.5 text-[15px] font-medium text-signal-300 underline-offset-2 hover:underline">
                     {article.title}
                   </Link>
                   <p className="text-[15px] leading-relaxed text-ink-200">{article.quickAnswer?.text}</p>

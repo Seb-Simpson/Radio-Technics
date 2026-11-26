@@ -4,12 +4,12 @@ import type { GlossaryTerm } from "@/types";
  * Plain-English explanations of terms presenters meet in the studio.
  *
  * General broadcasting terms are written by the development team and are
- * marked `draft`. Myriad-specific terms are NOT defined from memory: until the
- * official Myriad 6 documentation has been read, they say so.
+ * marked `draft`. Myriad-specific terms are defined from the Myriad 6 help
+ * pages read on 2026-11-26 (in the team's own words). Glossary terms carry no
+ * review records, so they stay `draft`: that is not station verification.
  */
 const GENERAL = "General broadcasting explanation written by the Radio Technics development team. Not taken from Myriad documentation.";
-const PENDING_MYRIAD =
-  "Myriad term. Its exact meaning will be summarised from the official Myriad 6 documentation once that has been read; until then Radio Technics does not describe how it works.";
+const MYRIAD_MANUAL = "Summarised by the development team from the Myriad 6 help pages (dashboard, playing media and log icons), read 2026-11-26. Not station-verified.";
 
 export const glossary: GlossaryTerm[] = [
   {
@@ -36,9 +36,9 @@ export const glossary: GlossaryTerm[] = [
     term: "Live Assist",
     aliases: ["live assist mode", "live-assist"],
     definition:
-      "In broadcasting generally, a way of running playout where a presenter in the studio controls when items play, rather than the software running everything on its own. The station reports that Myriad 6 runs in Live Assist mode. Exactly how Myriad behaves in this mode will be summarised from the official documentation once it has been read.",
+      "In broadcasting generally, a way of running playout where a presenter in the studio controls when items play, rather than the software running everything on its own. The station reports that Myriad 6 runs in Live Assist mode. The Myriad 6 manual says that in this mode the presenter controls how items join, using stop chains and the Go button.",
     status: "draft",
-    source: `${GENERAL} Station configuration reported by station staff.`,
+    source: `${GENERAL} Station configuration reported by station staff. Myriad behaviour from the Myriad 6 help pages (dashboard, playing media), read 2026-11-26.`,
     relatedEquipmentIds: ["myriad-playout", "green-next-button"],
   },
   {
@@ -54,18 +54,20 @@ export const glossary: GlossaryTerm[] = [
     id: "stop-chain",
     term: "Stop chain",
     aliases: ["stop", "stop marker", "chain"],
-    definition: PENDING_MYRIAD,
+    definition:
+      "In Myriad, an item whose end type is Stop (a red square). It plays to its end and then Myriad waits for a manual action, usually pressing Go. The manual says stop chains are only available in Live Assist mode. Which items at this station use one is not confirmed.",
     status: "draft",
-    source: "Listed in the RT-003 brief as a Myriad topic. Official Myriad 6 documentation not yet read.",
+    source: MYRIAD_MANUAL,
     relatedEquipmentIds: ["myriad-playout"],
   },
   {
     id: "go-function",
     term: "Go (Myriad)",
     aliases: ["go", "go button", "play next"],
-    definition: `${PENDING_MYRIAD} Radio Technics does not assume the physical green button does the same thing as any on-screen control.`,
+    definition:
+      "In Myriad, the dashboard Go button starts the next log item by hand, and by default fades out what is playing. Go is also an end type (a green circle) where an item flows into the next on its own. Radio Technics does not assume the physical green button does the same thing as any on-screen control.",
     status: "draft",
-    source: "Listed in the RT-003 brief as a Myriad topic. Official Myriad 6 documentation not yet read.",
+    source: MYRIAD_MANUAL,
     relatedEquipmentIds: ["myriad-playout", "green-next-button"],
   },
   {
@@ -73,9 +75,9 @@ export const glossary: GlossaryTerm[] = [
     term: "Player",
     aliases: ["players", "player 1", "player 2", "player 3", "player 4"],
     definition:
-      "In the station's photograph, the bottom of the Myriad screen shows four areas labelled Player 1 to Player 4, one of them showing the song that was playing. What each player does will be summarised from the official documentation once it has been read.",
+      "In the station's photograph, the bottom of the Myriad screen shows four areas labelled Player 1 to Player 4, one of them showing the song that was playing. The Myriad 6 manual says each player shows the item's title, artist and timers, with play/pause, re-cue and eject controls and VU meters.",
     status: "draft",
-    source: "Observation from the station's photograph of the Myriad screen.",
+    source: "Observation from the station's photograph of the Myriad screen, and the Myriad 6 help page on media players (read 2026-11-26).",
     relatedEquipmentIds: ["myriad-playout"],
   },
   {

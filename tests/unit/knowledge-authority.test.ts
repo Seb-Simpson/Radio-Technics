@@ -30,7 +30,14 @@ describe("shipped knowledge content", () => {
   it("does not claim manufacturer documentation beyond what has been read", () => {
     for (const a of articles) {
       expect(a.status).not.toBe("manufacturer-documented");
-      for (const s of a.sections) expect(s.status, `${a.id}: ${s.heading}`).not.toBe("manufacturer-documented");
+      for (const s of a.sections.filter((sec) => sec.status === "manufacturer-documented")) {
+        const cited = (s.sourceIds ?? []).map((id) => a.sources.find((src) => src.id === id));
+        expect(cited.length, `${a.id}: ${s.heading}`).toBeGreaterThan(0);
+        for (const src of cited) {
+          expect(src?.kind, `${a.id}: ${s.heading}`).toBe("manufacturer");
+          expect(src?.retrievedOn, `${a.id}: ${s.heading}`).toBe("2026-11-26");
+        }
+      }
     }
     for (const src of [SOURCES.myriadSupport, SOURCES.myriadDashboard, SOURCES.myriadPlaying]) {
       expect(src.kind).toBe("manufacturer");
@@ -56,9 +63,11 @@ describe("shipped knowledge content", () => {
     expect(goArticle.openQuestions.join(" ")).toMatch(/same function/);
   });
 
-  it("glossary terms for Myriad features don't define them from memory", () => {
+  it("glossary terms for Myriad features come from the read manual and are not station-verified", () => {
     for (const id of ["stop-chain", "go-function"]) {
-      expect(glossary.find((t) => t.id === id)!.definition).toMatch(/once that has been read/);
+      const term = glossary.find((t) => t.id === id)!;
+      expect(term.source).toMatch(/Myriad 6 help pages/);
+      expect(term.status).toBe("draft");
     }
   });
 });

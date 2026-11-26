@@ -30,7 +30,7 @@ import type { ConversationState, UserInput } from "@/lib/troubleshooter/types";
 export const SESSION_KEY = "radio-technics.session";
 export const SESSION_VERSION = 4;
 /** Bump when the engine's behaviour changes, so old inputs aren't replayed into a different conversation. */
-export const ENGINE_VERSION = "rt-002d-r1.1";
+export const ENGINE_VERSION = "rt-002d-r1.3";
 export const SESSION_MAX_IDLE_MS = 2 * 60 * 60 * 1000;
 /** Larger than any real session; anything bigger is not ours. */
 export const MAX_STORED_CHARS = 1_000_000;

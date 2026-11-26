@@ -159,7 +159,7 @@ describe("11. urgent-silence protection still applies", () => {
   it("search flags confirmed silence as urgent and keeps only the urgent reading", () => {
     const r = search("We're off air!");
     expect(r.safety.urgent).toBe(true);
-    expect(r.interpretations.map((i) => i.intentId)).not.toContain("play-next-song");
+    expect(r.interpretations.map((i) => i.intentId)).toEqual(["silence-on-air"]);
   });
 
   it("possible silence is flagged without being treated as confirmed", () => {

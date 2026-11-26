@@ -8,7 +8,7 @@ import { validateWorkspaceCommand } from "@/lib/workspace/commands";
 import type { ContentBundle } from "@/lib/content/validate";
 import type { ReviewRecord } from "@/types";
 
-const NOW = new Date("2026-11-02T12:00:00Z");
+const NOW = new Date("2026-11-26T12:00:00Z");
 const goodReview: ReviewRecord = { reviewer: "Station engineer (J. Smith)", date: "2026-10-30", source: "Walkthrough in studio" };
 
 function withChanges(change: (c: ContentBundle) => ContentBundle) {

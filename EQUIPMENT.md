@@ -6,6 +6,24 @@
 
 Nothing in this document has been verified by the station engineer. Labels visible in the photographs are recorded as observations only. They are not treated as confirmed facts and have not been turned into instructions.
 
+## Documentation read
+
+Manufacturer pages read on 2026-11-26 (publisher: Broadcast Radio; product: Myriad 6). They are summarised in our own words and never copied. Reading them does not authorise any repair or recovery step, and none of them describes fault-finding.
+
+| Source ID | Page | Status |
+| --- | --- | --- |
+| `myriad-6-support` | https://www.broadcastradio.com/myriad-6-playout-support | Read. Landing page only; points to the help portal. |
+| `myriad-6-dashboard` | https://help.broadcastradio.com/support/solutions/articles/101000549663-understanding-the-dashboard-in-myriad-playout-6 | Read. |
+| `myriad-6-playing-media` | https://help.broadcastradio.com/support/solutions/articles/101000549648-playing-media-items-in-myriad-playout-6 | Read. |
+| `myriad-6-log-icons` | https://help.broadcastradio.com/support/solutions/articles/101000534883-myriad-playout-myriad-anywhere-pro-log-icons | Read. Covers Playout and Anywhere Pro; icon images are not described in its text, so colours other than Go (green circle), Stop (red square) and Sweeper (yellow plus) are not recorded. |
+| `myriad-6-item-types` | https://help.broadcastradio.com/support/solutions/articles/101000549542-understanding-media-item-types-and-display-in-myriad | Read. |
+| `myriad-6-media-players` | https://help.broadcastradio.com/support/solutions/articles/101000549652-using-media-players-in-myriad-playout-6 | Read (found by searching the help portal). |
+| `myriad-6-endings-sweepers` | https://help.broadcastradio.com/support/solutions/articles/101000549606-understanding-media-item-types-endings-and-sweepers-in-myriad-playout-6 | Read (found by searching the help portal). |
+
+Not read: help-portal search hits that are not about Myriad 6 playout basics (Myriad 7, Cloud, MIDI controllers, BR Live) and the Glossary and "Number of items to cue" pages, which were not needed yet. No page failed or needed a login.
+
+Not stated by any page read: what the dashboard looks like when nothing is playing or when playout has failed, and the on-screen colours of the dashboard background. The station engineer still needs to confirm how this studio is set up.
+
 ## Equipment
 
 | ID | Equipment | Function | Status | Seen in photographs |

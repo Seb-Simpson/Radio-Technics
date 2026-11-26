@@ -62,7 +62,7 @@ test("an article shows authority, sources, open questions and related links", as
   await expect(page.getByRole("region", { name: "Unresolved — waiting for the station engineer" })).toContainText("red and green squares");
   const sources = page.getByRole("region", { name: "Sources" });
   await expect(sources.getByRole("link", { name: /Understanding the Dashboard in Myriad Playout 6/ })).toHaveAttribute("href", /help\.broadcastradio\.com/);
-  await expect(sources.getByText("Not yet read").first()).toBeVisible();
+  await expect(sources.getByText(/read 2026-11-26/).first()).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
   await page.getByRole("region", { name: "Related articles" }).getByRole("link").first().click();

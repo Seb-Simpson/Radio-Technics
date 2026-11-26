@@ -3,42 +3,85 @@ import type { SourceReference } from "@/types";
 /**
  * Shared source references for Knowledge Centre articles.
  *
- * Manufacturer sources are listed with `retrievedOn: null` until someone has
- * actually read them. In RT-003 the development environment could not reach
- * broadcastradio.com, so the official Myriad 6 pages below have NOT been
- * read or summarised yet. Nothing in Radio Technics is marked
- * "manufacturer-documented" until they are.
+ * Manufacturer sources carry `retrievedOn` only once someone has actually read
+ * the page (null = not read). The Myriad 6 help pages below were read on
+ * 2026-11-26; Radio Technics summarises them in its own words and does not
+ * copy them. Reading a page never authorises a repair or recovery procedure.
  */
-const NOT_YET_READ =
-  "Listed for review. Not yet read or summarised: the RT-003 development environment could not reach broadcastradio.com. No content in Radio Technics is taken from this page yet.";
+const READ = "2026-11-26";
+const BR = "Broadcast Radio";
+const HELP = "https://help.broadcastradio.com/support/solutions/articles";
 
 export const SOURCES = {
   myriadSupport: {
     id: "myriad-6-support",
     title: "Myriad 6 Playout support",
     url: "https://www.broadcastradio.com/myriad-6-playout-support",
-    publisher: "Broadcast Radio (manufacturer of Myriad)",
+    publisher: BR,
     kind: "manufacturer",
-    retrievedOn: null,
-    note: NOT_YET_READ,
+    product: "Myriad 6",
+    retrievedOn: READ,
+    note: "Read 2026-11-26. Landing page that points to documentation, videos, downloads and the help portal; it explains nothing about operating Myriad itself.",
   },
   myriadDashboard: {
     id: "myriad-6-dashboard",
     title: "Understanding the Dashboard in Myriad Playout 6",
-    url: "https://help.broadcastradio.com/support/solutions/articles/101000549663-understanding-the-dashboard-in-myriad-playout-6",
-    publisher: "Broadcast Radio (manufacturer of Myriad)",
+    url: `${HELP}/101000549663-understanding-the-dashboard-in-myriad-playout-6`,
+    publisher: BR,
     kind: "manufacturer",
-    retrievedOn: null,
-    note: NOT_YET_READ,
+    product: "Myriad 6",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (page modified 11 Apr 2025). Covers the dashboard, Go button, chain types, quick actions and playout modes.",
   },
   myriadPlaying: {
     id: "myriad-6-playing-media",
     title: "Playing Media Items in Myriad Playout 6",
-    url: "https://help.broadcastradio.com/support/solutions/articles/101000549648-playing-media-items-in-myriad-playout-6",
-    publisher: "Broadcast Radio (manufacturer of Myriad)",
+    url: `${HELP}/101000549648-playing-media-items-in-myriad-playout-6`,
+    publisher: BR,
     kind: "manufacturer",
-    retrievedOn: null,
-    note: NOT_YET_READ,
+    product: "Myriad 6",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (page modified 11 Apr 2025). Covers ways of playing items, Live Assist cueing and Go/Stop end types.",
+  },
+  myriadLogIcons: {
+    id: "myriad-6-log-icons",
+    title: "Myriad Playout & Myriad Anywhere Pro Log Icons",
+    url: `${HELP}/101000534883-myriad-playout-myriad-anywhere-pro-log-icons`,
+    publisher: BR,
+    kind: "manufacturer",
+    product: "Myriad 6",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (page modified 24 Sep 2024). Lists log item types, chain types, item status, playout modes and dashboard controls; the icon images themselves are not described in the text.",
+  },
+  myriadItemTypes: {
+    id: "myriad-6-item-types",
+    title: "Understanding Media Item Types and Display in Myriad",
+    url: `${HELP}/101000549542-understanding-media-item-types-and-display-in-myriad`,
+    publisher: BR,
+    kind: "manufacturer",
+    product: "Myriad 6",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (page modified 11 Apr 2025). Describes media item types and what a media tile shows.",
+  },
+  myriadPlayers: {
+    id: "myriad-6-media-players",
+    title: "Using Media Players in Myriad Playout 6",
+    url: `${HELP}/101000549652-using-media-players-in-myriad-playout-6`,
+    publisher: BR,
+    kind: "manufacturer",
+    product: "Myriad 6",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (page modified 11 Apr 2025). Describes the player display, timers and VU meters.",
+  },
+  myriadEndings: {
+    id: "myriad-6-endings-sweepers",
+    title: "Understanding Media Item Types, Endings, and Sweepers in Myriad Playout 6",
+    url: `${HELP}/101000549606-understanding-media-item-types-endings-and-sweepers-in-myriad-playout-6`,
+    publisher: BR,
+    kind: "manufacturer",
+    product: "Myriad 6",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (page modified 11 Apr 2025). Describes item types, ending types and the sweeper setting.",
   },
   stationBriefing: {
     id: "station-briefing",

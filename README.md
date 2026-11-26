@@ -72,7 +72,7 @@ New hotspots are recorded with `identity: "draft"`. Only change that to `verifie
 
 ## Limitations (RT-003)
 - Troubleshooter uses deterministic understanding and scripted flows, not AI.
-- Official Myriad 6 documentation is listed but not yet read (the build environment could not reach broadcastradio.com), so Myriad articles are drafts.
+- Seven official Myriad 6 help pages were read on 2026-11-26 and are registered as sources (see `EQUIPMENT.md`, "Documentation read"). Existing Myriad articles are still drafts until their content is reviewed against those pages.
 - No engineer-verified information or procedures yet; technical-support contact details have not been provided.
 - Hotspot positions were placed from the photographs by the development team; which equipment each one shows is unconfirmed.
 - No authentication or editing. Sessions are kept only in the current browser tab.

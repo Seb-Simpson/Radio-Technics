@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultContent, validateContent } from "@/lib/content/validate";
+import { SOURCES } from "@/data/sources";
 import { manualLabel, QUICK_ANSWER_MAX_WORDS } from "@/lib/knowledge/manual-label";
 import type { ContentBundle } from "@/lib/content/validate";
 import type { SourceReference } from "@/types";
@@ -82,6 +83,55 @@ describe("quick answer validation", () => {
       art.quickAnswer = { text: "Short answer.", status: "manufacturer-documented", sourceIds: ["manual-src"] };
     });
     expect(m.join("\n")).toMatch(/approved procedure; its quick answer cannot be manufacturer-documented/);
+  });
+});
+
+describe("Myriad 6 sources", () => {
+  const manufacturer = Object.values(SOURCES).filter((s) => s.kind === "manufacturer");
+  const read = manufacturer.filter((s) => s.retrievedOn !== null);
+
+  it("registers the Myriad 6 help pages that were read", () => {
+    const ids = manufacturer.map((s) => s.id);
+    for (const id of [
+      "myriad-6-support",
+      "myriad-6-dashboard",
+      "myriad-6-playing-media",
+      "myriad-6-log-icons",
+      "myriad-6-item-types",
+    ]) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  it("every manufacturer source cited by a manufacturer-documented section or quick answer has retrievedOn and product", () => {
+    const byId = new Map(manufacturer.map((s) => [s.id, s]));
+    for (const article of defaultContent.articles) {
+      const cited = [
+        ...article.sections.filter((sec) => sec.status === "manufacturer-documented").flatMap((sec) => sec.sourceIds ?? []),
+        ...(article.quickAnswer?.status === "manufacturer-documented" ? article.quickAnswer.sourceIds : []),
+      ];
+      for (const id of cited) {
+        const src = byId.get(id);
+        if (!src) continue;
+        expect(src.retrievedOn, `${article.id} cites ${id}`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(src.product, `${article.id} cites ${id}`).toBeTruthy();
+      }
+    }
+  });
+
+  it("every read manufacturer source names its product, publisher and a help-portal or site URL", () => {
+    expect(read.length).toBeGreaterThanOrEqual(5);
+    for (const s of read) {
+      expect(s.product, s.id).toBe("Myriad 6");
+      expect(s.publisher, s.id).toBe("Broadcast Radio");
+      expect(s.url, s.id).toMatch(/^https:\/\/(www|help)\.broadcastradio\.com\//);
+    }
+  });
+
+  it("no read manufacturer source keeps a NOT_YET_READ note", () => {
+    for (const s of read) {
+      expect(s.note ?? "", s.id).not.toMatch(/not yet read|could not reach/i);
+    }
   });
 });
 

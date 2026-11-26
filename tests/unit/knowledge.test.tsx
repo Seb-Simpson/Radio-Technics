@@ -1,6 +1,7 @@
-import { screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { EquipmentPanel } from "@/components/studio/EquipmentPanel";
 import { KnowledgeCentre } from "@/components/knowledge/KnowledgeCentre";
 import { articles } from "@/data/articles";
 import { getArticlesForEquipment, searchArticles } from "@/lib/knowledge/search";
@@ -106,3 +107,65 @@ function SelectionProbe() {
   const { state } = useWorkspace();
   return <p data-testid="selection">{state.selectedEquipmentId ?? "none"}</p>;
 }
+
+describe("quick answers and manual labels", () => {
+  async function renderArticle(articleId: string) {
+    const { default: ArticlePage } = await import("@/app/knowledge/[articleId]/page");
+    const ui = await ArticlePage({ params: Promise.resolve({ articleId }) });
+    return renderWithProviders(ui);
+  }
+
+  it("shows the quick answer before the first section, with a manual label and original link", async () => {
+    await renderArticle("kb-myriad-live-assist");
+    const article = articles.find((a) => a.id === "kb-myriad-live-assist")!;
+    const answer = screen.getByText(article.quickAnswer!.text);
+    const firstSection = screen.getByRole("heading", { level: 2, name: article.sections[0]!.heading });
+    expect(answer.compareDocumentPosition(firstSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const quick = screen.getByRole("region", { name: "Quick answer" });
+    expect(within(quick).getByText("From the Myriad 6 manual")).toBeInTheDocument();
+    const link = within(quick).getByRole("link", { name: /Read the original/ });
+    expect(link).toHaveAttribute("href", expect.stringMatching(/^https:\/\//));
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(link).toHaveAccessibleName(/opens in a new tab/);
+  });
+
+  it("labels only the manufacturer section of a mixed article", async () => {
+    await renderArticle("kb-myriad-live-assist");
+    const stationHeading = screen.getByRole("heading", { name: "What the station has told us" });
+    expect(within(stationHeading.parentElement!).queryByText(/From the .* manual/)).toBeNull();
+    const manualHeading = screen.getByRole("heading", { name: "What the manual says about the play modes" });
+    expect(within(manualHeading.parentElement!).getByText("From the Myriad 6 manual")).toBeInTheDocument();
+  });
+
+  it("a station-reported quick answer has no label and no original link", async () => {
+    await renderArticle("guide-green-button");
+    const quick = screen.getByRole("region", { name: "Quick answer" });
+    expect(within(quick).getByText("Station reported")).toBeInTheDocument();
+    expect(within(quick).queryByText(/From the .* manual/)).toBeNull();
+    expect(within(quick).queryByRole("link")).toBeNull();
+  });
+
+  it("article cards show the quick answer instead of the summary", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<KnowledgeCentre />);
+    await user.type(screen.getByLabelText("Describe the problem, or search for a topic"), "live assist");
+    const article = articles.find((a) => a.id === "kb-myriad-live-assist")!;
+    expect(await screen.findByText(article.quickAnswer!.text)).toBeInTheDocument();
+    expect(screen.queryByText(article.summary)).toBeNull();
+  });
+
+  it("the equipment panel lists manual quick answers for Myriad, and omits the section otherwise", () => {
+    const { unmount } = render(<EquipmentPanel equipmentId="myriad-playout" onClose={() => {}} />);
+    const heading = screen.getByRole("heading", { name: "From the manual" });
+    const section = heading.closest("section")!;
+    const article = articles.find((a) => a.id === "kb-myriad-live-assist")!;
+    expect(within(section).getByText(article.quickAnswer!.text)).toBeInTheDocument();
+    expect(within(section).getAllByText("From the Myriad 6 manual").length).toBeGreaterThan(1);
+    unmount();
+
+    render(<EquipmentPanel equipmentId="toaster" onClose={() => {}} />);
+    expect(screen.queryByRole("heading", { name: "From the manual" })).toBeNull();
+  });
+});

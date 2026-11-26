@@ -6,7 +6,9 @@ import type { ReactNode } from "react";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { VerificationBadge } from "@/components/ui/VerificationBadge";
 import { getCategory, getEquipmentById } from "@/lib/content/equipment";
-import { getArticleById } from "@/lib/knowledge/search";
+import { SourceLabel } from "@/components/knowledge/SourceLabel";
+import { manualLabel } from "@/lib/knowledge/manual-label";
+import { getArticleById, getArticlesForEquipment } from "@/lib/knowledge/search";
 import type { Hotspot } from "@/types";
 
 export interface EquipmentPanelProps {
@@ -64,6 +66,15 @@ export function EquipmentPanel({
     const article = getArticleById(id);
     return article ? [article] : [];
   });
+  // Related by either direction of the link; only manual-backed quick answers are listed.
+  const manualArticles = [...articles, ...getArticlesForEquipment(record.id)]
+    .filter((a, i, all) => all.findIndex((b) => b.id === a.id) === i)
+    .flatMap((article) => {
+      const source = article.quickAnswer?.sourceIds
+        .flatMap((id) => article.sources.filter((s) => s.id === id))
+        .find((s) => manualLabel(s) !== null);
+      return article.quickAnswer && source ? [{ article, source }] : [];
+    });
 
   return (
     <section aria-labelledby="equipment-panel-title" className="animate-fade-up flex flex-col" key={record.id}>
@@ -134,6 +145,24 @@ export function EquipmentPanel({
             ))}
           </ul>
         </PanelSection>
+
+        {manualArticles.length > 0 && (
+          <PanelSection icon={<BookOpen aria-hidden className="size-4" />} title="From the manual">
+            <ul className="flex flex-col gap-3">
+              {manualArticles.map(({ article, source }) => (
+                <li key={article.id} className="flex flex-col gap-1.5">
+                  <Link href={`/knowledge/${article.id}`} className="text-sm font-medium text-signal-300 underline-offset-2 hover:underline">
+                    {article.title}
+                  </Link>
+                  <p className="text-[15px] leading-relaxed text-ink-200">{article.quickAnswer?.text}</p>
+                  <div>
+                    <SourceLabel source={source} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </PanelSection>
+        )}
 
         {articles.length > 0 && (
           <PanelSection icon={<BookOpen aria-hidden className="size-4" />} title="Related guides">

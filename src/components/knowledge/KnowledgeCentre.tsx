@@ -4,11 +4,13 @@ import { ArrowRight, BookA, Crosshair, MessageSquare, Search, TriangleAlert, Wre
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useMemo, useState } from "react";
+import { SourceLabel } from "@/components/knowledge/SourceLabel";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { VerificationBadge } from "@/components/ui/VerificationBadge";
 import { articles as allArticles } from "@/data/articles";
 import { getCategories, getEquipmentById } from "@/lib/content/equipment";
 import { cn } from "@/lib/cn";
+import { manualLabel } from "@/lib/knowledge/manual-label";
 import { articleKindLabels, articleTypeLabels } from "@/lib/knowledge/labels";
 import { equipmentChoices, searchKnowledge, type SearchInterpretation } from "@/lib/knowledge/search-engine";
 import { useTroubleshooter } from "@/lib/troubleshooter/TroubleshooterProvider";
@@ -233,6 +235,17 @@ function InterpretationCard({
   );
 }
 
+function manualChip(article: KnowledgeArticle) {
+  const source = article.quickAnswer?.sourceIds
+    .flatMap((id) => article.sources.filter((s) => s.id === id))
+    .find((s) => manualLabel(s) !== null);
+  return source ? (
+    <div>
+      <SourceLabel source={source} />
+    </div>
+  ) : null;
+}
+
 function ArticleCard({ article, reason }: { article: KnowledgeArticle; reason?: string }) {
   return (
     <Link
@@ -249,7 +262,8 @@ function ArticleCard({ article, reason }: { article: KnowledgeArticle; reason?: 
         {article.title}
         <ArrowRight aria-hidden className="size-3.5 text-ink-500 transition-transform group-hover:translate-x-0.5 group-hover:text-signal-400" />
       </h3>
-      <p className="text-sm leading-relaxed text-ink-300">{article.summary}</p>
+      <p className="text-[15px] leading-relaxed text-ink-300">{article.quickAnswer?.text ?? article.summary}</p>
+      {manualChip(article)}
       {reason && <p className="mt-auto pt-1 text-[12px] text-ink-400">Why: {reason}</p>}
     </Link>
   );

@@ -208,5 +208,37 @@ describe("Troubleshooter UI", () => {
       expect(screen.queryByRole("region", { name: /What the (manual|maker's documentation) says/ })).not.toBeInTheDocument();
       expect(screen.queryByRole("link", { name: /Understanding the next item/ })).not.toBeInTheDocument();
     });
+
+    const noManualRegion = () => expect(screen.queryByRole("region", { name: /What the (manual|maker's documentation) says/ })).not.toBeInTheDocument();
+
+    it("shows no manual links when a possible incident was raised mid-flow and a non-urgent outcome is reached", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Troubleshooter />);
+      await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+      await user.click(screen.getByRole("button", { name: "Yes, that's it" }));
+      await user.click(screen.getByRole("button", { name: "Nothing changed" }));
+      await user.click(screen.getByRole("button", { name: "We're off air / urgent broadcast problem" }));
+      expect(screen.getByTestId("urgent-banner")).toBeInTheDocument();
+      // Correct the earlier answer so the flow reaches a NON-urgent outcome while the incident is still open.
+      await user.click(screen.getByRole("button", { name: "Change an earlier answer" }));
+      await user.click(screen.getByRole("button", { name: /^“What happened on the Myriad screen/ }));
+      await user.click(screen.getByRole("button", { name: "Something unexpected happened" }));
+      await user.click(screen.getByRole("button", { name: "Something else" }));
+      expect(within(log()).getByText(/Please contact technical support/)).toBeInTheDocument();
+      expect(screen.getByTestId("urgent-banner")).toBeInTheDocument();
+      noManualRegion();
+    });
+
+    it("shows no manual links after 'Broadcasting has resumed'", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Troubleshooter />);
+      await reachGreenButtonOutcome(user);
+      expect(screen.getByRole("region", { name: "What the manual says" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "We're off air / urgent broadcast problem" }));
+      noManualRegion();
+      await user.click(screen.getByRole("button", { name: "Broadcasting has resumed" }));
+      expect(screen.getByTestId("urgent-banner")).toHaveTextContent("reported earlier");
+      noManualRegion();
+    });
   });
 });

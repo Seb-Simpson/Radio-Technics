@@ -52,6 +52,7 @@ export function Troubleshooter() {
   }, [step.instanceId]);
   const armed = ACTIVATION_GUARD.ms === 0 || armedInstance === step.instanceId;
   const showSummary = step.kind === "support" || step.kind === "outcome";
+  // Deliberate defence in depth: conversation.urgent already covers an open incident, but each clause guards on its own.
   // Information only: never on the urgent outcome or while an incident is open (urgent handling stays the priority path).
   const manualPointers =
     step.kind === "outcome" && !step.urgent && !incidentActive && !conversation.urgent
@@ -539,17 +540,17 @@ function ManualPointers({ pointers }: { pointers: ManualPointer[] }) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="mb-3 rounded-lg border border-ink-700 bg-ink-850 px-3 py-2">
-      <h3 id={headingId} className="text-[13px] font-semibold text-ink-100">
+      <h3 id={headingId} className="text-[15px] font-semibold text-ink-100">
         {manualPointersHeading(pointers)}
       </h3>
-      <p className="mt-0.5 text-[13px] text-ink-300">For information only. It doesn&apos;t replace contacting technical support.</p>
-      <ul className="mt-1.5 flex flex-col gap-1">
+      <p className="mt-0.5 text-[15px] text-ink-300">For information only. It doesn&apos;t replace contacting technical support.</p>
+      <ul className="mt-1 flex flex-col">
         {pointers.map(({ article, label }) => (
           <li key={article.id}>
-            <Link href={`/knowledge/${article.id}`} className="text-[15px] font-medium text-signal-300 underline underline-offset-2">
+            <Link href={`/knowledge/${article.id}`} className="-mx-2 block rounded-md px-2 py-1.5 text-[15px] font-medium text-signal-300 underline underline-offset-2">
               {article.title}
             </Link>
-            <span className="block text-[13px] text-ink-300">{label}</span>
+            <span className="-mt-1 block pb-1.5 text-[14px] text-ink-300">{label}</span>
           </li>
         ))}
       </ul>

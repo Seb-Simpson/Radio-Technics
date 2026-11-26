@@ -316,7 +316,7 @@ export const equipment: EquipmentRecord[] = [
     ],
     aliases: ["studio monitor speakers", "monitor speakers", "studio speakers", "speakers", "speaker", "loudspeakers", "monitors", "monitor"],
     relatedArticleIds: ["ts-cant-hear-anything"],
-    flowEntryNodeId: "hear-speakers",
+    flowEntryNodeId: "sp-start",
   },
   {
     id: "audio-level-meters",

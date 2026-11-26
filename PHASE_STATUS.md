@@ -1,5 +1,15 @@
 # Phase Status
 
+## Studio speakers troubleshooting flow
+
+**Status:** Implemented and tested. Information gathering only.
+
+- New nodes `sp-start` → `sp-on-air` / `sp-mic-live` → `sp-side` → `sp-since` → `outcome-report`. Silent speakers first ask whether the station could be silent on air. "Yes" or "I'm not sure" leads to `outcome-urgent`.
+- Asks whether a microphone is live, because it is unconfirmed whether the speakers mute when a mic is live.
+- `studio-monitor-speakers` now enters at `sp-start`. The "I can't hear anything" flow still uses `hear-speakers`. `ENGINE_VERSION` is now `rt-002d-r1.3`.
+- Tests: `tests/unit/speakers-flow.test.ts`. `npm run check`: 24 files, 690 tests passed. `npm run test:e2e`: 309 passed, 181 skipped.
+- The first `next build` stops with a Next.js security notice about the installed version (16.4.3), and the next run succeeds. Upgrading Next.js is a separate change.
+
 ## Headphones troubleshooting flow
 
 **Status:** Implemented and tested. Information gathering only; no fixes are prescribed (no verified procedure exists).

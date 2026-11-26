@@ -290,6 +290,69 @@ export const flowNodes: FlowNode[] = [
     unsureNext: "outcome-report",
   },
 
+  /* ---------------- Studio speakers ---------------- */
+  // Information gathering only. Whether the speakers mute automatically when a
+  // microphone is live, and which control sets their volume, are unconfirmed.
+  {
+    id: "sp-start",
+    kind: "question",
+    prompt: "What's the problem with the studio speakers?",
+    help: "The station hasn't confirmed which control sets the speaker volume, so please don't adjust controls you're unsure about — especially while on air.",
+    showEquipmentId: "studio-monitor-speakers",
+    options: [
+      { id: "nothing", label: "Nothing is coming out of them", next: "sp-on-air", audio: "absent", match: ["nothing at all", "nothing coming out", "can't hear anything", "cant hear anything"], restate: "nothing is coming out of the studio speakers" },
+      { id: "some", label: "Some sounds, but not everything", next: "sp-mic-live", audio: "present", match: ["some sounds", "not everything"], restate: "some sounds come through the speakers, but not everything" },
+      { id: "volume", label: "They're too loud or too quiet", next: "sp-side", match: ["too loud", "too quiet", "volume"], restate: "the speakers are too loud or too quiet" },
+      { id: "wrong", label: "It sounds crackly, buzzing or distorted", next: "sp-side", match: ["crackly", "crackling", "buzzing", "buzz", "distorted", "hum", "humming"], restate: "the sound from the speakers is crackly, buzzing or distorted" },
+    ],
+    unsureNext: "sp-on-air",
+  },
+  {
+    id: "sp-on-air",
+    kind: "question",
+    broadcastCheck: true,
+    prompt: "Could the station be silent on air too, not just in the studio speakers?",
+    options: [
+      { id: "yes", label: "Yes, it might be silent on air", next: "outcome-urgent", answer: "yes", audio: "absent", restate: "the station might be silent on air right now" },
+      { id: "no", label: "No, it's only the speakers", next: "sp-mic-live", answer: "no", match: ["only the speakers", "only speakers"], restate: "only the studio speakers are affected, not what listeners hear" },
+    ],
+    unsureNext: "outcome-urgent",
+  },
+  {
+    id: "sp-mic-live",
+    kind: "question",
+    prompt: "Is a microphone switched on (live) right now?",
+    help: "Many studios quieten the speakers while a microphone is live, but the station hasn't confirmed whether this studio does. Technical support will want to know.",
+    showEquipmentId: "presenter-microphone",
+    options: [
+      { id: "yes", label: "Yes, a microphone is live", next: "sp-side", answer: "yes", match: ["mic is live", "mic is on", "microphone is on"], restate: "a microphone is live" },
+      { id: "no", label: "No, all microphones are off", next: "sp-side", answer: "no", match: ["mics are off", "mic is off", "microphones are off"], restate: "all microphones are off" },
+    ],
+    unsureNext: "sp-side",
+  },
+  {
+    id: "sp-side",
+    kind: "question",
+    prompt: "Is it both speakers, or only one?",
+    showEquipmentId: "studio-monitor-speakers",
+    options: [
+      { id: "both", label: "Both speakers", next: "sp-since", match: ["both"], restate: "both speakers are affected" },
+      { id: "one", label: "Only one speaker", next: "sp-since", match: ["only one", "one speaker", "left", "right"], restate: "only one speaker is affected" },
+    ],
+    unsureNext: "sp-since",
+  },
+  {
+    id: "sp-since",
+    kind: "question",
+    prompt: "Were the studio speakers working normally earlier today?",
+    showEquipmentId: "studio-monitor-speakers",
+    options: [
+      { id: "yes", label: "Yes, they were working earlier", asserts: { subject: "worked-earlier", value: true }, restate: "the speakers were working earlier today", next: "outcome-report", answer: "yes", match: ["working earlier", "were working"] },
+      { id: "no", label: "No, they haven't worked today", asserts: { subject: "worked-earlier", value: false }, restate: "the speakers haven't worked today", next: "outcome-report", answer: "no", match: ["not worked", "haven't worked"] },
+    ],
+    unsureNext: "outcome-report",
+  },
+
   /* ---------------- Cables ---------------- */
   {
     id: "cable-where",

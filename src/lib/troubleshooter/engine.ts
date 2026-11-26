@@ -49,6 +49,7 @@ const HEARING_NODE = "hear-where";
 const HEARING_NODES = new Set([
   "hear-where", "hear-headphones", "hear-speakers", "hear-on-air", "hear-meters", "mic-headphones",
   "hp-start", "hp-on-air", "hp-meters", "hp-missing", "hp-ears", "hp-whose", "hp-since",
+  "sp-start", "sp-on-air", "sp-mic-live", "sp-side", "sp-since",
 ]);
 
 export const UNIVERSAL_OPTIONS: StepOption[] = [

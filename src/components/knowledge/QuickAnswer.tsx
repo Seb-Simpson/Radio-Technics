@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { ExternalLink } from "lucide-react";
 import { SourceLabel } from "@/components/knowledge/SourceLabel";
 import { VerificationBadge } from "@/components/ui/VerificationBadge";
@@ -5,7 +6,9 @@ import { manualLabel } from "@/lib/knowledge/manual-label";
 import type { KnowledgeArticle } from "@/types";
 
 /** The short answer at the top of an article, with its manual label and link when it comes from a read manual. */
-export function QuickAnswer({ article }: { article: KnowledgeArticle }) {
+export function QuickAnswer({ article, headingLevel = 2 }: { article: KnowledgeArticle; headingLevel?: 2 | 3 | 4 }) {
+  const headingId = useId();
+  const Heading = `h${headingLevel}` as const;
   const quick = article.quickAnswer;
   if (!quick) return null;
   const cited = quick.sourceIds.flatMap((id) => {
@@ -16,11 +19,11 @@ export function QuickAnswer({ article }: { article: KnowledgeArticle }) {
   const href = manual?.url?.startsWith("https://") ? manual.url : undefined;
 
   return (
-    <section aria-labelledby="quick-answer-heading" className="rounded-xl border border-signal-500/30 bg-ink-900 p-4">
+    <section aria-labelledby={headingId} className="rounded-xl border border-signal-500/30 bg-ink-900 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 id="quick-answer-heading" className="text-[15px] font-semibold text-ink-100">
+        <Heading id={headingId} className="text-[15px] font-semibold text-ink-100">
           Quick answer
-        </h2>
+        </Heading>
         {manual && <SourceLabel source={manual} />}
         <VerificationBadge status={quick.status} />
       </div>

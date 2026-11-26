@@ -203,4 +203,10 @@ describe("quick answers found by asking naturally (Phase 1)", () => {
     expect(r.safety.urgent).toBe(true);
     expect(r.interpretations.map((i) => i.intentId)).not.toContain("play-next-song");
   });
+
+  it("silence or no-audio phrasing never produces the play-next-song reading", () => {
+    for (const q of ["nothing is coming out, how do I play the next song", "there is no sound, how do I play the next song"]) {
+      expect(search(q).interpretations.map((i) => i.intentId)).not.toContain("play-next-song");
+    }
+  });
 });

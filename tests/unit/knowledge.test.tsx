@@ -178,8 +178,8 @@ describe("quick answers and manual labels", () => {
     await user.type(screen.getByLabelText("Describe the problem, or search for a topic"), "we're off air, how do I play the next song");
     const results = await screen.findByRole("region", { name: "Search results" });
     const alert = await within(results).findByRole("alert");
-    const quick = within(results).queryByRole("heading", { name: "Quick answer" });
-    if (quick) expect(alert.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const quick = await within(results).findByRole("heading", { name: "Quick answer" });
+    expect(alert.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("the equipment panel lists manual quick answers for Myriad, and omits the section otherwise", () => {

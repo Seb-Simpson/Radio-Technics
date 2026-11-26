@@ -179,7 +179,7 @@ export function KnowledgeCentre() {
                       {topWithQuick.title}
                     </Link>
                   </h3>
-                  <QuickAnswer article={topWithQuick} />
+                  <QuickAnswer article={topWithQuick} headingLevel={4} />
                 </div>
               )}
               <ul className="mt-2 grid gap-3 md:grid-cols-2">

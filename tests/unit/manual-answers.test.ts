@@ -193,13 +193,16 @@ describe("Myriad 6 answers in the articles", () => {
   it("the screen article claims no colours the manual does not state", () => {
     const a = byId("kb-myriad-screen");
     expect(a.openQuestions.join(" ")).toMatch(/red|colour/i);
-    expect(a.quickAnswer!.text).not.toMatch(/background|fault|error|alarm/i);
+    expect(a.quickAnswer!.text).toMatch(/does not state any error or fault colour/);
+    expect(a.quickAnswer!.text).not.toMatch(/no other dashboard colours/i);
   });
 
   it("the green button and next-song articles say nothing is confirmed about the button", () => {
     expect(byId("guide-green-button").quickAnswer!.text).toMatch(/not (yet )?confirmed/i);
     expect(byId("ts-next-song-wont-play").quickAnswer!.text).toMatch(/not (yet )?confirmed/i);
-    expect(byId("ts-next-song-wont-play").quickAnswer!.text).toMatch(/technical support/i);
+    const ts = byId("ts-next-song-wont-play");
+    expect(ts.quickAnswer!.text).not.toMatch(/technical support/i);
+    expect(ts.sections.filter((x) => x.status !== "manufacturer-documented").flatMap((x) => x.body).join(" ")).toMatch(/technical support/i);
   });
 
   it("glossary Myriad terms are no longer described as unread", () => {

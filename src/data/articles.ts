@@ -229,7 +229,7 @@ export const articles: KnowledgeArticle[] = [
     glossaryTermIds: ["live-assist", "log", "dead-air"],
     revisions: [RT001, RT003, fromManual("Added a short answer and what the manual says about how Myriad moves on.")],
     quickAnswer: {
-      text: "The manual says an item set to Stop waits at its end until Go is pressed. Whether that explains this at the station is not confirmed. If listeners may hear silence, contact technical support straight away.",
+      text: "The manual says an item set to Stop waits at its end until Go is pressed. Whether that explains this at the station is not confirmed.",
       status: "manufacturer-documented",
       sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
     },
@@ -245,7 +245,7 @@ export const articles: KnowledgeArticle[] = [
         status: "manufacturer-documented",
         sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
         body: [
-          "How one log item leads into the next depends on its end type. A Go item flows into the next on its own. A Stop item plays to its end and then waits until Go is pressed. A sweeper is tucked into the start of the next item.",
+          "How one log item leads into the next depends on its end type. A Go item flows into the next on its own. A Stop item plays to its end and then waits until Go is pressed. A sweeper is tucked into the next item's intro when the next item has one.",
           "In Live Assist, Myriad cues the next item automatically about 30 seconds before it is needed.",
           "The manual does not give any fault-finding steps, so this section does not say what to do.",
         ],
@@ -434,7 +434,7 @@ export const articles: KnowledgeArticle[] = [
     software: MYRIAD_6,
     summary: "A guided look at the Myriad screen: what the manual says the dashboard shows, and the coloured squares in the station's photograph whose meaning is not confirmed.",
     quickAnswer: {
-      text: "The manual says each log item shows how it joins the next: a green circle is Go, a red square is Stop, a yellow plus is a sweeper. It states no other dashboard colours.",
+      text: "The manual says each log item shows how it joins the next: a green circle is Go, a red square is Stop, a yellow plus is a sweeper. It does not state any error or fault colour.",
       status: "manufacturer-documented",
       sourceIds: [SOURCES.myriadDashboard.id],
     },
@@ -484,7 +484,7 @@ export const articles: KnowledgeArticle[] = [
         body: [
           "The dashboard sits above the log in most layouts. It shows what is playing, what is coming and how items join.",
           "Now Playing shows the title, artist and a media-type icon, with a progress bar that fills as the item plays and the time remaining beside it. The intro length appears in brackets.",
-          "Each item carries a symbol for how it ends: a green circle means Go (flow straight into the next item), a red square means Stop (wait at the end until Go is pressed) and a yellow plus means sweeper (tuck into the next item's intro).",
+          "Each item carries a symbol for how it ends: a green circle means Go (flow straight into the next item), a red square means Stop (wait at the end until Go is pressed) and a yellow plus means sweeper (tuck into the next item's intro, if it has one).",
           "A bar along the bottom shows the time left in the hour, the date and time, the show name and whether the show is running over or under time. In Live Assist it also shows the time to the next stop chain.",
           "The manual does not describe any colour for errors or faults, or what a stalled dashboard looks like.",
         ],
@@ -529,7 +529,7 @@ export const articles: KnowledgeArticle[] = [
         body: [
           "The dashboard shows what is playing, what is coming and how the items join.",
           "Each upcoming item has quick-action buttons, numbered to a player: play now, cue for preview, dump (remove it from the log) and view its information.",
-          "How the next item starts depends on the end type of the item before it: Go flows on automatically, Stop waits until Go is pressed, and a sweeper is tucked into the next item's intro.",
+          "How the next item starts depends on the end type of the item before it: Go flows on automatically, Stop waits until Go is pressed, and a sweeper is tucked into the next item's intro when it fits.",
           "In Live Assist, Myriad cues the next log item automatically about 30 seconds before it is needed.",
           "The manual does not say how the station's logs are set up.",
         ],
@@ -577,7 +577,7 @@ export const articles: KnowledgeArticle[] = [
         status: "manufacturer-documented",
         sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id, SOURCES.myriadLogIcons.id],
         body: [
-          "Every log item has an end type: Go, Stop or sweeper. Stop is the red square. An item with a Stop chain plays to its end and then Myriad waits for a manual action.",
+          "Every log item has an end type: Go, Stop or sweeper (a short item that Myriad tries to tuck into the next item's intro). Stop is the red square. An item with a Stop chain plays to its end and then Myriad waits for a manual action.",
           "The manual's example is a live voice link: the item is set to Stop, and the presenter presses Go afterwards to carry on.",
           "The Go button starts the next log item. When the log is waiting at a stop chain, with the item finished and the next one ready, Go starts that next item.",
           "Stop chains are only available in Live Assist mode. In AutoFade every item is Go. In Live Assist the bar at the bottom of the dashboard shows the time to the next stop chain.",

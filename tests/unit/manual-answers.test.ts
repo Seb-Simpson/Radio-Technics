@@ -27,6 +27,13 @@ describe("manualLabel", () => {
   it("labels a read manufacturer source that names its product", () => {
     expect(manualLabel(manual)).toBe("From the Myriad 6 manual");
   });
+  it("labels a product page as a product page, and keeps manual as the default", () => {
+    expect(manualLabel({ ...manual, documentType: "product-page" })).toBe("From the Myriad 6 product page");
+    expect(manualLabel({ ...manual, documentType: "manual" })).toBe("From the Myriad 6 manual");
+  });
+  it("still returns null for an unread product page", () => {
+    expect(manualLabel({ ...manual, documentType: "product-page", retrievedOn: null })).toBeNull();
+  });
   it("returns null when the source has not been read", () => {
     expect(manualLabel({ ...manual, retrievedOn: null })).toBeNull();
   });
@@ -217,10 +224,10 @@ describe("studio hardware explanations", () => {
   const byId = (id: string) => defaultContent.articles.find((a) => a.id === id)!;
   const equipment = (id: string) => defaultContent.equipment.find((e) => e.id === id)!;
   const hardware = [
-    { id: "kb-axia-iq-console", equipment: "mixing-console", label: "From the Axia iQ manual", host: /^https:\/\/www\.telosalliance\.com\// },
-    { id: "kb-axia-qor16", equipment: "equipment-rack", label: "From the Axia QOR.16 manual", host: /^https:\/\/www\.telosalliance\.com\// },
+    { id: "kb-axia-iq-console", equipment: "mixing-console", label: "From the Axia iQ product page", host: /^https:\/\/www\.telosalliance\.com\// },
+    { id: "kb-axia-qor16", equipment: "equipment-rack", label: "From the Axia QOR.16 product page", host: /^https:\/\/www\.telosalliance\.com\// },
     { id: "kb-telos-xnode2", equipment: "equipment-rack", label: "From the Telos xNode2 manual", host: /^https:\/\/docs\.telosalliance\.com\// },
-    { id: "kb-behringer-ms16", equipment: "studio-monitor-speakers", label: "From the Behringer MS16 manual", host: /^https:\/\/www\.behringer\.com\// },
+    { id: "kb-behringer-ms16", equipment: "studio-monitor-speakers", label: "From the Behringer MS16 product page", host: /^https:\/\/www\.behringer\.com\// },
   ];
 
   it("each article has a short quick answer from a read manufacturer source", () => {

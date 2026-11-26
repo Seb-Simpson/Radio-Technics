@@ -147,7 +147,7 @@ export function EquipmentPanel({
         </PanelSection>
 
         {manualArticles.length > 0 && (
-          <PanelSection icon={<BookOpen aria-hidden className="size-4" />} title="From the manual">
+          <PanelSection icon={<BookOpen aria-hidden className="size-4" />} title="From the maker's documentation">
             <ul className="flex flex-col gap-3">
               {manualArticles.map(({ article, source }) => (
                 <li key={article.id} className="flex flex-col gap-1.5">

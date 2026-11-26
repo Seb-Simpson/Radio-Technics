@@ -170,6 +170,8 @@ export interface SourceReference {
   retrievedOn: string | null;
   /** Product the source documents (e.g. "Myriad 6"); used for the "From the … manual" label. */
   product?: string;
+  /** What kind of page a manufacturer source is. Absent means "manual". */
+  documentType?: "manual" | "product-page";
   note?: string;
 }
 

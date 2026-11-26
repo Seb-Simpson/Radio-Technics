@@ -184,7 +184,7 @@ describe("quick answers and manual labels", () => {
 
   it("the equipment panel lists manual quick answers for Myriad, and omits the section otherwise", () => {
     const { unmount } = render(<EquipmentPanel equipmentId="myriad-playout" onClose={() => {}} />);
-    const heading = screen.getByRole("heading", { name: "From the manual" });
+    const heading = screen.getByRole("heading", { name: "From the maker's documentation" });
     const section = heading.closest("section")!;
     const article = articles.find((a) => a.id === "kb-myriad-live-assist")!;
     expect(within(section).getByText(article.quickAnswer!.text)).toBeInTheDocument();
@@ -192,7 +192,7 @@ describe("quick answers and manual labels", () => {
     unmount();
 
     render(<EquipmentPanel equipmentId="toaster" onClose={() => {}} />);
-    expect(screen.queryByRole("heading", { name: "From the manual" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "From the maker's documentation" })).toBeNull();
   });
 });
 

@@ -8,6 +8,7 @@ import type { FlowNode, TroubleshootingTopic } from "@/lib/troubleshooter/types"
 import type { AudioClaim } from "@/lib/troubleshooter/understand";
 import type { GlossaryTerm, SourceKind } from "@/types";
 import type { EquipmentRecord, Fact, Hotspot, KnowledgeArticle, ReviewRecord, StudioView, VerificationStatus } from "@/types";
+import { QUICK_ANSWER_MAX_WORDS } from "@/lib/knowledge/manual-label";
 import { validateRegion } from "./geometry";
 
 export interface ContentIssue {
@@ -234,6 +235,22 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
     });
     if (article.status === "manufacturer-documented" && !article.sections.some((sec) => citesReadManufacturer(sec.sourceIds))) {
       a([`${article.id} is marked manufacturer-documented but cites no manufacturer source that has been read`]);
+    }
+
+    const quick = article.quickAnswer;
+    if (quick) {
+      const qa = `${article.id} quick answer`;
+      if (quick.text.trim().split(/\s+/).filter(Boolean).length > QUICK_ANSWER_MAX_WORDS) {
+        a([`${qa} is longer than ${QUICK_ANSWER_MAX_WORDS} words`]);
+      }
+      for (const id of quick.sourceIds) {
+        if (!sourceById.has(id)) a([`${qa} cites unknown source "${id}"`]);
+      }
+      if (quick.status === "manufacturer-documented") {
+        if (!citesReadManufacturer(quick.sourceIds)) a([`${qa} is marked manufacturer-documented but cites a manufacturer source that hasn't been read`]);
+        if (article.kind === "approved-procedure") a([`${article.id} is an approved procedure; its quick answer cannot be manufacturer-documented`]);
+      }
+      a(checkVerification(qa, quick.status, quick.status === "verified" ? article.review : undefined, now));
     }
 
     // Only engineer-approved content may be presented as a procedure.

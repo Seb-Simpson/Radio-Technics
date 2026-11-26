@@ -213,6 +213,76 @@ describe("Myriad 6 answers in the articles", () => {
   });
 });
 
+describe("studio hardware explanations", () => {
+  const byId = (id: string) => defaultContent.articles.find((a) => a.id === id)!;
+  const equipment = (id: string) => defaultContent.equipment.find((e) => e.id === id)!;
+  const hardware = [
+    { id: "kb-axia-iq-console", equipment: "mixing-console", label: "From the Axia iQ manual", host: /^https:\/\/www\.telosalliance\.com\// },
+    { id: "kb-axia-qor16", equipment: "equipment-rack", label: "From the Axia QOR.16 manual", host: /^https:\/\/www\.telosalliance\.com\// },
+    { id: "kb-telos-xnode2", equipment: "equipment-rack", label: "From the Telos xNode2 manual", host: /^https:\/\/docs\.telosalliance\.com\// },
+    { id: "kb-behringer-ms16", equipment: "studio-monitor-speakers", label: "From the Behringer MS16 manual", host: /^https:\/\/www\.behringer\.com\// },
+  ];
+
+  it("each article has a short quick answer from a read manufacturer source", () => {
+    for (const h of hardware) {
+      const a = byId(h.id);
+      expect(a, h.id).toBeDefined();
+      expect(a.kind, h.id).toBe("informational");
+      expect(a.status, h.id).toBe("draft");
+      const q = a.quickAnswer!;
+      expect(q.status, h.id).toBe("manufacturer-documented");
+      expect(q.text.trim().split(/\s+/).length, h.id).toBeLessThanOrEqual(QUICK_ANSWER_MAX_WORDS);
+      expect(q.sourceIds.length, h.id).toBeGreaterThan(0);
+      for (const id of q.sourceIds) {
+        const src = a.sources.find((s) => s.id === id)!;
+        expect(src.kind, `${h.id} ${id}`).toBe("manufacturer");
+        expect(src.url, `${h.id} ${id}`).toMatch(h.host);
+        expect(src.retrievedOn, `${h.id} ${id}`).toBe("2026-11-26");
+        expect(manualLabel(src), `${h.id} ${id}`).toBe(h.label);
+      }
+      expect(a.revisions.at(-1), h.id).toMatchObject({ date: "2026-11-26" });
+      expect(a.revisions.at(-1)!.author, h.id).toMatch(/^Development team \(from .+ documentation\)$/);
+    }
+  });
+
+  it("no hardware article tells the presenter to restart, unplug, reset or change settings", () => {
+    const bad = /\b(restart|reboot|unplug|reset|power off|change the settings?)\b/i;
+    for (const h of hardware) {
+      const a = byId(h.id);
+      for (const sec of a.sections.filter((s) => s.status === "manufacturer-documented")) {
+        expect(`${sec.heading} ${sec.body.join(" ")}`, `${h.id} ${sec.heading}`).not.toMatch(bad);
+      }
+      expect(a.quickAnswer!.text, h.id).not.toMatch(bad);
+      expect(a.diagnosticQuestions.length, h.id).toBe(0);
+    }
+  });
+
+  it("each is linked from, and links to, its equipment record", () => {
+    for (const h of hardware) {
+      expect(byId(h.id).equipmentIds, h.id).toContain(h.equipment);
+      expect(equipment(h.equipment).relatedArticleIds, h.id).toContain(h.id);
+    }
+  });
+
+  it("model identifications stay photo observations that the station has not confirmed", () => {
+    for (const h of hardware) {
+      const a = byId(h.id);
+      const own = a.sections.filter((s) => s.status !== "manufacturer-documented").flatMap((s) => s.body).join(" ");
+      expect(own, h.id).toMatch(/photo/i);
+      expect(own + a.openQuestions.join(" "), h.id).toMatch(/not (been )?confirmed/i);
+      expect(a.sections.some((s) => s.status === "station-reported"), h.id).toBe(false);
+      expect(a.sections.filter((s) => s.status === "manufacturer-documented").length, h.id).toBeGreaterThan(0);
+    }
+    expect(byId("kb-behringer-ms16").quickAnswer!.text).not.toMatch(/wall/i);
+  });
+
+  it("does not claim the QOR.16 is paired with the iQ console", () => {
+    const a = byId("kb-axia-qor16");
+    expect(a.openQuestions.join(" ")).toMatch(/iQ/);
+    expect(a.quickAnswer!.text).not.toMatch(/\biQ\b/);
+  });
+});
+
 describe("real content", () => {
   it("still validates", () => {
     expect(validateContent(defaultContent, NOW)).toEqual([]);

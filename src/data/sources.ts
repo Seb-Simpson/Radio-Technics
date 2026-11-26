@@ -10,6 +10,7 @@ import type { SourceReference } from "@/types";
  */
 const READ = "2026-11-26";
 const BR = "Broadcast Radio";
+const TA = "Telos Alliance";
 const HELP = "https://help.broadcastradio.com/support/solutions/articles";
 
 export const SOURCES = {
@@ -83,6 +84,56 @@ export const SOURCES = {
     retrievedOn: READ,
     note: "Read 2026-11-26 (page modified 11 Apr 2025). Describes item types, ending types and the sweeper setting.",
   },
+  axiaIq: {
+    id: "axia-iq-product",
+    title: "Axia iQ Broadcast Console (product page)",
+    url: "https://www.telosalliance.com/consoles-audio-mixing/broadcast-consoles/axia-iq-family/axia-iq",
+    publisher: TA,
+    kind: "manufacturer",
+    product: "Axia iQ",
+    retrievedOn: READ,
+    note: "Read 2026-11-26. A product page, not the manual: it describes the console, its parts and features. The page links a User Manual and Quick Start Guide as PDFs, which were not read.",
+  },
+  axiaQor16: {
+    id: "axia-qor16-product",
+    title: "Axia QOR.16 Integrated Console Engine (product page)",
+    url: "https://www.telosalliance.com/consoles-audio-mixing/integrated-console-engines/axia-qor16",
+    publisher: TA,
+    kind: "manufacturer",
+    product: "Axia QOR.16",
+    retrievedOn: READ,
+    note: "Read 2026-11-26. A product page, not the manual: it describes the engine, its connections and features. It names Radius, DESQ and RAQ consoles; it does not mention iQ.",
+  },
+  xnode2Intro: {
+    id: "xnode2-manual-intro",
+    title: "xNode2 Manual: Introducing the xNode2",
+    url: "https://docs.telosalliance.com/docs/introducing-the-xnode2",
+    publisher: TA,
+    kind: "manufacturer",
+    product: "Telos xNode2",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (updated 25 Mar 2026). Manual chapter on what the xNode2 family is and its front and rear panels. The documentation spells the name xNode2; the station's rack label reads X-NODE 2.",
+  },
+  xnode2InDepth: {
+    id: "xnode2-manual-in-depth",
+    title: "xNode2 Manual: In-Depth",
+    url: "https://docs.telosalliance.com/docs/in-depth",
+    publisher: TA,
+    kind: "manufacturer",
+    product: "Telos xNode2",
+    retrievedOn: READ,
+    note: "Read 2026-11-26 (updated 30 Apr 2026). Manual chapter on the front-panel screen, buttons and power lights, and the web interface; the web interface was not needed.",
+  },
+  behringerMs16: {
+    id: "behringer-ms16-product",
+    title: "Behringer MS16 (product page)",
+    url: "https://www.behringer.com/en/products/0316-AAH",
+    publisher: "Behringer (www.behringer.com)",
+    kind: "manufacturer",
+    product: "Behringer MS16",
+    retrievedOn: READ,
+    note: "Read 2026-11-26. A product page, not the manual: it lists features and connections. The Quick Start Guide and User Manual PDFs it links are hosted outside the sites Radio Technics could reach and were not read.",
+  },
   stationBriefing: {
     id: "station-briefing",
     title: "Station briefings to the development team (RT-001 to RT-003)",
@@ -117,6 +168,24 @@ export const SOURCES = {
     kind: "photograph",
     retrievedOn: "2026-11-02",
     note: "Observations only.",
+  },
+  photoEquipmentRack: {
+    id: "photo-equipment-rack",
+    title: "Station photograph: equipment rack",
+    url: "/studio/photos/equipment-rack.jpg",
+    publisher: "Mix 92.6 station staff",
+    kind: "photograph",
+    retrievedOn: "2026-11-02",
+    note: "Observations only: labels visible in one photograph.",
+  },
+  photoMonitorSpeaker: {
+    id: "photo-monitor-speaker",
+    title: "Station photograph: monitor speaker",
+    url: "/studio/photos/monitor-speaker.jpg",
+    publisher: "Mix 92.6 station staff",
+    kind: "photograph",
+    retrievedOn: "2026-11-02",
+    note: "Observations only: labels visible in one photograph.",
   },
   developmentTeam: {
     id: "development-team",

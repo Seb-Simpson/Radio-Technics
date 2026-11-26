@@ -29,6 +29,7 @@ const RT001 = created("First version (RT-001).");
 const RT003 = created("Restructured for RT-003: symptoms, diagnostic questions, sources and open questions added.");
 const RT003_NEW = created("Created in RT-003.");
 const MANUAL_DATE = "2026-11-26";
+const fromDocs = (product: string, summary: string): ArticleRevision => ({ date: MANUAL_DATE, author: `Development team (from ${product} documentation)`, summary });
 const fromManual = (summary: string): ArticleRevision => ({ date: MANUAL_DATE, author: "Development team (from Myriad 6 manual)", summary });
 
 export const articles: KnowledgeArticle[] = [
@@ -829,6 +830,238 @@ export const articles: KnowledgeArticle[] = [
         status: "draft",
         sourceIds: [SOURCES.photoConsole.id],
         body: ["The console has channels labelled Myriad A 1 to A 4, meter displays labelled PROGRAM 1 and MONITOR, and a label asking presenters to leave all Myriad faders up at the end of the show."],
+      },
+    ],
+  },
+  /* ---------------------------------------------------------------- */
+  /* Studio hardware explained from the makers' documentation          */
+  /* (Task 6). Models are read from photographs and NOT confirmed by   */
+  /* the station; the documentation describes the product in general,  */
+  /* not how this studio is set up.                                    */
+  /* ---------------------------------------------------------------- */
+  {
+    id: "kb-axia-iq-console",
+    title: "The Axia iQ console",
+    type: "equipment-guide",
+    category: "mixing",
+    kind: "informational",
+    summary: "What Axia says the iQ console is and what its displays and controls are for. The model name comes from a label in the station's photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Axia describes iQ as a radio mixing console with 8 to 24 faders. A small display under each fader shows its current source, and the mixing itself is done in a separate engine unit, not in the desk.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.axiaIq.id],
+    },
+    equipmentIds: ["mixing-console"],
+    status: "draft",
+    keywords: ["axia", "iq", "console", "mixing desk", "fader", "options knob", "soft key", "preview", "cue", "meters", "talkback", "studiocore"],
+    symptoms: ["What is this console?", "What is the display under each fader?", "What does the Options knob do?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Whether the station's console is an Axia iQ (the label is seen in a photograph only) and which frames and options it has.",
+      "Which source is assigned to each fader at this station.",
+      "Which controls presenters are expected to use, and which should be left alone.",
+    ],
+    sources: [SOURCES.photoConsole, SOURCES.axiaIq, SOURCES.developmentTeam],
+    relatedArticleIds: ["guide-studio-overview", "kb-axia-qor16"],
+    relatedTopicIds: [],
+    glossaryTermIds: ["fader"],
+    revisions: [fromDocs("Axia iQ", "Created from the Axia iQ product page.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoConsole.id],
+        body: ["The photograph shows a console with an Axia iQ label. This is an observation from a photograph: the station has not confirmed the model."],
+      },
+      {
+        heading: "What Axia says the iQ is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaIq.id],
+        body: [
+          "Axia presents iQ as a radio console system that can be built with 8 to 24 faders: a main frame with eight faders, plus optional expansion frames.",
+          "The desk is the control surface. Axia says the mixing and processing happen in a separate engine unit, called StudioCore, linked to the desk by a single cable, and that no audio passes directly through the desk itself.",
+          "This describes the product in general. It does not say how this studio's console is set up.",
+        ],
+      },
+      {
+        heading: "What the controls and displays are for, according to Axia",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaIq.id],
+        body: [
+          "A small display under each fader shows the source currently on that fader. Pressing the Options knob brings up extra choices for that fader on its display, such as gain trim, voice EQ and pan.",
+          "Each fader has a Soft key whose job depends on the source: Axia lists talkback and starting events as examples. Each fader also has a Preview (cue) function for listening to a source before it is taken to air.",
+          "Channel-input confidence meters are described as showing whether audio is present on a source before it goes to air. Separate program meters can be shown in VU or PPM style.",
+          "There are monitor sections for the studio and for the control room, and a talkback system for speaking to studio guests.",
+          "The page does not describe what any fault looks like on these displays.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "kb-axia-qor16",
+    title: "The Axia QOR.16 console engine",
+    type: "equipment-guide",
+    category: "technical",
+    kind: "informational",
+    summary: "What Axia says the QOR.16 is, from its product page. The model name comes from a label in the station's rack photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Axia describes the QOR.16 as a console engine: one box holding the mixing engine, audio connections, power supply and network switch for a console. Its front-panel LED display shows power and network status.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.axiaQor16.id],
+    },
+    equipmentIds: ["equipment-rack"],
+    status: "draft",
+    keywords: ["axia", "qor.16", "qor16", "console engine", "rack", "engine", "livewire", "network switch", "power supply"],
+    symptoms: ["What is the Axia unit in the rack?", "What does the QOR.16 do?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Whether this QOR.16 serves the console in the photograph. Axia's page lists the QOR.16 for Radius, DESQ and RAQ consoles, and its iQ page names a different engine (StudioCore) for iQ, so the pairing at this station is not known.",
+      "What the front-panel display normally shows at this station.",
+      "What the unit does in this studio and whether presenters should ever touch it.",
+    ],
+    sources: [SOURCES.photoEquipmentRack, SOURCES.axiaQor16, SOURCES.developmentTeam],
+    relatedArticleIds: ["kb-axia-iq-console", "kb-telos-xnode2"],
+    relatedTopicIds: [],
+    glossaryTermIds: [],
+    revisions: [fromDocs("Axia QOR.16", "Created from the Axia QOR.16 product page.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoEquipmentRack.id],
+        body: ["A unit in the equipment rack photograph is labelled Axia QOR.16 Integrated Console Engine. This is an observation from a photograph: the station has not confirmed the model or what it is connected to."],
+      },
+      {
+        heading: "What Axia says the QOR.16 is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaQor16.id],
+        body: [
+          "Axia calls it an integrated console engine: a single unit that combines the mixing engine, audio inputs and outputs, the console's power supply and a network switch. It is listed for use with Radius, DESQ and RAQ mixing consoles.",
+          "Connections Axia lists include two microphone inputs, analog inputs and outputs, one AES/EBU input and output, four control-logic (GPIO) ports and several network ports, some of which can supply power to network devices.",
+          "It is cooled without a fan, so it is silent in the studio.",
+          "This describes the product in general. It does not say how this station uses it.",
+        ],
+      },
+      {
+        heading: "What the indicator is for, according to Axia",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaQor16.id],
+        body: ["Axia says a front-panel LED display monitors power and network status. The page does not say what the display looks like in any particular state."],
+      },
+    ],
+  },
+  {
+    id: "kb-telos-xnode2",
+    title: "The Telos xNode2 audio interface",
+    type: "equipment-guide",
+    category: "technical",
+    kind: "informational",
+    summary: "What Telos Alliance says an xNode2 is, with its front-panel screen and lights, from the xNode2 manual. The model name comes from a label in the station's rack photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Telos describes xNode2 as a half-rack box that converts audio between ordinary connections and network audio. Its front screen shows setup and status, and two lights show whether power comes from the network cable or the mains.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.xnode2Intro.id, SOURCES.xnode2InDepth.id],
+    },
+    equipmentIds: ["equipment-rack"],
+    status: "draft",
+    keywords: ["xnode", "x-node", "xnode2", "x-node 2", "telos", "node", "audio over ip", "aoip", "rack", "lcd", "power lights"],
+    symptoms: ["What is the X-NODE 2 in the rack?", "What are the lights on the X-NODE 2?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Which xNode2 model the station has: the label in the photograph does not say, and the manual describes five (analog, AES3, microphone, GPIO and mixed signal).",
+      "What the front-panel screen normally shows at this station.",
+      "What this unit connects to in this studio, and whether presenters should ever touch it.",
+    ],
+    sources: [SOURCES.photoEquipmentRack, SOURCES.xnode2Intro, SOURCES.xnode2InDepth, SOURCES.developmentTeam],
+    relatedArticleIds: ["kb-axia-qor16"],
+    relatedTopicIds: [],
+    glossaryTermIds: [],
+    revisions: [fromDocs("Telos xNode2", "Created from the xNode2 manual chapters on the family and the front panel.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoEquipmentRack.id],
+        body: ["A unit in the equipment rack photograph is labelled X-NODE 2, with The Telos Alliance name. This is an observation from a photograph: the station has not confirmed the model, and the label does not show which xNode2 variant it is."],
+      },
+      {
+        heading: "What Telos says an xNode2 is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.xnode2Intro.id],
+        body: [
+          "The manual describes the xNode2 as a family of half-rack units that convert between line-level audio, AES3 digital audio, microphone inputs or control signals (GPIO) and audio over a network (AoIP).",
+          "There are five models: analog, AES3, microphone, GPIO and mixed signal. They differ in their connections at the back.",
+          "All models have a mains connection and two network ports at the back, and the manual says the top network port can also supply power.",
+          "This describes the product in general. It does not say how this station uses it.",
+        ],
+      },
+      {
+        heading: "What the front panel is for, according to the manual",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.xnode2Intro.id, SOURCES.xnode2InDepth.id],
+        body: [
+          "The front has a colour screen showing setup and status information, and two buttons next to it. The top button normally pages between views; the bottom is a soft key whose job is shown on the screen.",
+          "Two lights show whether power is available from the network cable (PoE+) or from the mains; each is lit when that source is present, and the labels are on the lenses.",
+          "The manual says the screen dims after a period without use and brightens when a button is pressed.",
+          "The manual does not say what the screen shows when something is wrong.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "kb-behringer-ms16",
+    title: "The Behringer MS16 speakers",
+    type: "equipment-guide",
+    category: "monitoring",
+    kind: "informational",
+    summary: "What Behringer says the MS16 is and what its controls and sockets are for, from its product page. The model name comes from a label in the station's photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Behringer describes the MS16 as a pair of powered stereo speakers, 2 x 8 watts, with Volume, Bass and Treble controls. The maker says the speakers switch off automatically when headphones are plugged into the speaker's own PHONES socket.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.behringerMs16.id],
+    },
+    equipmentIds: ["studio-monitor-speakers"],
+    status: "draft",
+    keywords: ["behringer", "ms16", "monitor speaker", "speakers", "volume", "bass", "treble", "phones", "headphone socket"],
+    symptoms: ["What are these speakers?", "What do the knobs on the speakers do?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Whether the station's speakers are the Behringer MS16 (the label is seen in a photograph only) and how many there are.",
+      "Whether the studio uses the speakers' own sockets at all, and which control sets the speaker volume at this station.",
+      "Whether the speakers mute automatically when a microphone is live. Behringer's page describes no such feature and does not mention wall mounting.",
+    ],
+    sources: [SOURCES.photoMonitorSpeaker, SOURCES.behringerMs16, SOURCES.developmentTeam],
+    relatedArticleIds: ["ts-cant-hear-anything"],
+    relatedTopicIds: [],
+    glossaryTermIds: [],
+    revisions: [fromDocs("Behringer MS16", "Created from the Behringer MS16 product page.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoMonitorSpeaker.id],
+        body: ["The photograph shows a wall-mounted speaker labelled MS16 Monitor Speaker with a Behringer logo. This is an observation from a photograph: the station has not confirmed the model."],
+      },
+      {
+        heading: "What Behringer says the MS16 is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.behringerMs16.id],
+        body: [
+          "Behringer describes the MS16 as an active (powered) 16-watt personal monitor system: two speakers with 4-inch woofers, each driven by an 8-watt amplifier.",
+          "It is magnetically shielded, and a speaker cable linking the two speakers is included.",
+          "This describes the product in general. It does not say how this station's speakers are set up.",
+        ],
+      },
+      {
+        heading: "What the controls and sockets are for, according to Behringer",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.behringerMs16.id],
+        body: [
+          "The page lists Volume, Bass and Treble controls.",
+          "All audio inputs are on the right-hand speaker: a stereo input for sources such as CD players, an RCA stereo input, and a microphone input with its own MIC LEVEL control.",
+          "The PHONES socket takes headphones; Behringer says the speakers switch off automatically while headphones are connected to it.",
+          "The page does not describe any indicator light.",
+        ],
       },
     ],
   },

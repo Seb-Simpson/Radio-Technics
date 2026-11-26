@@ -24,6 +24,26 @@ Not read: help-portal search hits that are not about Myriad 6 playout basics (My
 
 Not stated by any page read: what the dashboard looks like when nothing is playing or when playout has failed, and the on-screen colours of the dashboard background. The station engineer still needs to confirm how this studio is set up.
 
+### Studio hardware documentation (read 2026-11-26)
+
+Summarised in our own words; none describes fault recovery, and none says how this station has wired or set up the unit. The model names below are labels seen in photographs and are **not confirmed by the station**; the articles say "the photograph shows".
+
+| Source ID | Page | Status |
+| --- | --- | --- |
+| `axia-iq-product` | https://www.telosalliance.com/consoles-audio-mixing/broadcast-consoles/axia-iq-family/axia-iq | Read. Product page, not the manual. Article `kb-axia-iq-console`. |
+| `axia-qor16-product` | https://www.telosalliance.com/consoles-audio-mixing/integrated-console-engines/axia-qor16 | Read. Product page, not the manual. Article `kb-axia-qor16`. |
+| `xnode2-manual-intro` | https://docs.telosalliance.com/docs/introducing-the-xnode2 | Read (xNode2 Manual chapter). Article `kb-telos-xnode2`. |
+| `xnode2-manual-in-depth` | https://docs.telosalliance.com/docs/in-depth | Read (xNode2 Manual chapter, front panel). |
+| `behringer-ms16-product` | https://www.behringer.com/en/products/0316-AAH | Read. Product page, not the manual. Article `kb-behringer-ms16`. |
+
+Open questions from this reading:
+
+- **Not read:** the Axia iQ User Manual and Quick Start Guide, and the MS16 Quick Start Guide and User Manual. They are PDFs; the MS16 ones are hosted on a site Radio Technics could not reach (the iQ ones were not attempted). Controls and indicators are therefore described only as far as the product pages and xNode2 manual chapters go. The Axia QOR.16 manual and the rest of the xNode2 manual (model chapters, web interface) were not read either.
+- **QOR.16 and iQ:** Axia's QOR.16 page lists it for Radius, DESQ and RAQ consoles; its iQ page names a different engine (StudioCore). Whether the QOR.16 in the rack serves the console labelled iQ is unknown. Ask the engineer.
+- **xNode2 variant:** the rack label reads X-NODE 2 only; the manual describes five models (analog, AES3, microphone, GPIO, mixed signal).
+- **MS16:** the product page describes a small powered stereo speaker pair and does not mention wall mounting, indicator lights or any mute-on-microphone feature. Confirm the model, quantity and what is connected to the speakers' sockets.
+- **Normal indicators:** none of the pages say what the QOR.16 display, the xNode2 screen or the iQ displays look like in a fault. The engineer should say what normal looks like.
+
 ## Equipment
 
 | ID | Equipment | Function | Status | Seen in photographs |

@@ -99,7 +99,7 @@ export const equipment: EquipmentRecord[] = [
       "Whether any controls should never be changed by presenters",
     ],
     aliases: ["mixing console", "mixer", "mixing desk", "desk", "console", "faders", "fader", "sliders", "slider", "board"],
-    relatedArticleIds: ["guide-studio-overview", "ts-cant-hear-anything"],
+    relatedArticleIds: ["guide-studio-overview", "ts-cant-hear-anything", "kb-axia-iq-console"],
     flowEntryNodeId: "generic-symptom",
   },
   {
@@ -315,7 +315,7 @@ export const equipment: EquipmentRecord[] = [
       "Which control sets the speaker volume",
     ],
     aliases: ["studio monitor speakers", "monitor speakers", "studio speakers", "speakers", "speaker", "loudspeakers", "monitors", "monitor"],
-    relatedArticleIds: ["ts-cant-hear-anything"],
+    relatedArticleIds: ["ts-cant-hear-anything", "kb-behringer-ms16"],
     flowEntryNodeId: "hear-speakers",
   },
   {
@@ -371,7 +371,7 @@ export const equipment: EquipmentRecord[] = [
       "What normal indicator lights look like",
     ],
     aliases: ["technical equipment rack", "equipment rack", "rack", "cabinet", "tech rack"],
-    relatedArticleIds: ["help-cables"],
+    relatedArticleIds: ["help-cables", "kb-axia-qor16", "kb-telos-xnode2"],
     flowEntryNodeId: "generic-symptom",
   },
   {

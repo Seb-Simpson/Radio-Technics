@@ -164,4 +164,49 @@ describe("Troubleshooter UI", () => {
     expect(screen.getByTestId("possible-silence-banner")).toBeInTheDocument();
     expect(screen.queryByTestId("urgent-banner")).not.toBeInTheDocument();
   });
+
+  describe("pointing to the manual at an outcome (information only)", () => {
+    async function reachGreenButtonOutcome(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+      await user.click(screen.getByRole("button", { name: "Yes, that's it" }));
+      await user.click(screen.getByRole("button", { name: "Nothing changed" }));
+      await user.click(screen.getByRole("button", { name: "Yes, it's still playing" }));
+    }
+
+    it("links to what the manual says, after the technical-support message", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Troubleshooter />);
+      await reachGreenButtonOutcome(user);
+      expect(within(log()).getByText(/Please contact technical support/)).toBeInTheDocument();
+      const section = screen.getByRole("region", { name: "What the manual says" });
+      const link = within(section).getByRole("link", { name: /Understanding the next item in the log/ });
+      expect(link).toHaveAttribute("href", "/knowledge/kb-myriad-next-item");
+      expect(section).toHaveTextContent("From the Myriad 6 manual");
+      // Not an answer path: nothing was added to the conversation by showing it.
+      expect(within(section).queryByRole("button")).not.toBeInTheDocument();
+      // The support message comes before the links in reading order.
+      const support = within(log()).getByText(/Please contact technical support/);
+      expect(support.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("does not show manual links while a question is still being asked", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Troubleshooter />);
+      await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+      await user.click(screen.getByRole("button", { name: "Yes, that's it" }));
+      expect(screen.queryByRole("region", { name: /What the (manual|maker's documentation) says/ })).not.toBeInTheDocument();
+    });
+
+    it("never shows manual links on the urgent outcome or while an incident is open", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Troubleshooter />);
+      await user.type(screen.getByLabelText("Describe the problem"), "the green thing isn't working{Enter}");
+      await user.click(screen.getByRole("button", { name: "Yes, that's it" }));
+      await user.click(screen.getByRole("button", { name: "Nothing changed" }));
+      await user.click(screen.getByRole("button", { name: "No — there's silence" }));
+      expect(screen.getByTestId("urgent-banner")).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: /What the (manual|maker's documentation) says/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /Understanding the next item/ })).not.toBeInTheDocument();
+    });
+  });
 });

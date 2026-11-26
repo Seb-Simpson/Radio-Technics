@@ -200,7 +200,7 @@ export const equipment: EquipmentRecord[] = [
       "Whether presenters can also advance to the next song from the Myriad screen",
     ],
     aliases: ["myriad", "playout", "playout software", "playlist", "next song", "next track", "song", "songs", "track", "music"],
-    relatedArticleIds: ["ts-next-song-wont-play", "guide-green-button"],
+    relatedArticleIds: ["ts-next-song-wont-play", "guide-green-button", "kb-myriad-next-item"],
     flowEntryNodeId: "my-start",
   },
   {
@@ -236,7 +236,7 @@ export const equipment: EquipmentRecord[] = [
       "Whether the small hole above the button is an indicator light, and what it shows",
     ],
     aliases: ["green button", "green thing", "green", "next button", "big button", "button", "next song", "next track"],
-    relatedArticleIds: ["guide-green-button", "ts-next-song-wont-play"],
+    relatedArticleIds: ["guide-green-button", "ts-next-song-wont-play", "kb-myriad-next-item"],
     flowEntryNodeId: "gb-screen",
   },
   {

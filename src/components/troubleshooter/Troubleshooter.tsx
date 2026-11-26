@@ -1,7 +1,8 @@
 "use client";
 
 import { Check, CircleHelp, Copy, Crosshair, LifeBuoy, PencilLine, RadioTower, RotateCcw, SendHorizontal, TriangleAlert, Undo2, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import Link from "next/link";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { ConfirmClear } from "./ConfirmClear";
 import { UrgentBroadcastButton } from "./UrgentBroadcastButton";
 import { ACTIVATION_GUARD } from "./activation-guard";
@@ -9,6 +10,7 @@ import { StudioExplorer } from "@/components/studio/StudioExplorer";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { getEquipmentById } from "@/lib/content/equipment";
 import { cn } from "@/lib/cn";
+import { manualPointersForEquipment, manualPointersHeading, type ManualPointer } from "@/lib/knowledge/manual-pointers";
 import { buildSupportSummary, describeStep, MAX_INPUT_LENGTH } from "@/lib/troubleshooter/engine";
 import { useTroubleshooter } from "@/lib/troubleshooter/TroubleshooterProvider";
 import type { ChatMessage, StepOption } from "@/lib/troubleshooter/types";
@@ -50,6 +52,11 @@ export function Troubleshooter() {
   }, [step.instanceId]);
   const armed = ACTIVATION_GUARD.ms === 0 || armedInstance === step.instanceId;
   const showSummary = step.kind === "support" || step.kind === "outcome";
+  // Information only: never on the urgent outcome or while an incident is open (urgent handling stays the priority path).
+  const manualPointers =
+    step.kind === "outcome" && !step.urgent && !incidentActive && !conversation.urgent
+      ? manualPointersForEquipment([conversation.equipmentId, step.equipmentId])
+      : [];
 
   // Show the studio beside the chat on wide screens; otherwise "Show me where" navigates.
   useEffect(() => {
@@ -350,6 +357,7 @@ export function Troubleshooter() {
 
         <div className="border-t border-ink-750 bg-ink-900 px-4 pt-3 pb-3 sm:px-5 xl:tall:min-h-0 xl:tall:shrink xl:tall:overflow-y-auto">
           {showSummary && <SupportSummary text={buildSupportSummary(conversation)} />}
+          {manualPointers.length > 0 && <ManualPointers pointers={manualPointers} />}
 
           <div ref={optionsRef} className="flex flex-col gap-2.5" role="group" aria-label="Responses" onKeyDownCapture={blockKeyRepeat}>
             {answerOptions.length > 0 && (
@@ -524,5 +532,27 @@ function SupportSummary({ text }: { text: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function ManualPointers({ pointers }: { pointers: ManualPointer[] }) {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="mb-3 rounded-lg border border-ink-700 bg-ink-850 px-3 py-2">
+      <h3 id={headingId} className="text-[13px] font-semibold text-ink-100">
+        {manualPointersHeading(pointers)}
+      </h3>
+      <p className="mt-0.5 text-[13px] text-ink-300">For information only. It doesn&apos;t replace contacting technical support.</p>
+      <ul className="mt-1.5 flex flex-col gap-1">
+        {pointers.map(({ article, label }) => (
+          <li key={article.id}>
+            <Link href={`/knowledge/${article.id}`} className="text-[15px] font-medium text-signal-300 underline underline-offset-2">
+              {article.title}
+            </Link>
+            <span className="block text-[13px] text-ink-300">{label}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

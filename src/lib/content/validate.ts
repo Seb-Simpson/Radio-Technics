@@ -57,6 +57,13 @@ export function isMeaningfulProvenance(value: unknown): boolean {
   return words.length >= 2 && text.replace(/[^a-z]/gi, "").length >= 6;
 }
 
+/** A source publisher only needs to be a real name: a one-word brand such as "Behringer" is fine, placeholders are not. */
+export function isMeaningfulPublisher(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  return text.length >= 2 && !PLACEHOLDER.test(text) && /[a-z]{2,}/i.test(text);
+}
+
 /** A reviewer must be identifiable: a name, or a name with a role — not a bare role or placeholder. */
 function isIdentifiableReviewer(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -215,7 +222,7 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
       if (src.retrievedOn !== null && (!isValidIsoDate(src.retrievedOn) || src.retrievedOn > todayIso(now))) {
         a([`${article.id} source "${src.id}" has an invalid retrieval date`]);
       }
-      if (!isMeaningfulProvenance(src.publisher)) a([`${article.id} source "${src.id}" needs a meaningful publisher`]);
+      if (!isMeaningfulPublisher(src.publisher)) a([`${article.id} source "${src.id}" needs a meaningful publisher`]);
     }
     const citesReadManufacturer = (ids: string[] | undefined) =>
       (ids ?? []).some((id) => sourceById.get(id)?.kind === "manufacturer" && sourceById.get(id)?.retrievedOn !== null);

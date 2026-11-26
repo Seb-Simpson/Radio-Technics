@@ -130,7 +130,7 @@ export const SOURCES = {
     id: "behringer-ms16-product",
     title: "Behringer MS16 (product page)",
     url: "https://www.behringer.com/en/products/0316-AAH",
-    publisher: "Behringer (www.behringer.com)",
+    publisher: "Behringer",
     kind: "manufacturer",
     product: "Behringer MS16",
     documentType: "product-page",

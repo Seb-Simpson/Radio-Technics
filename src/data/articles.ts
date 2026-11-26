@@ -847,7 +847,7 @@ export const articles: KnowledgeArticle[] = [
     kind: "informational",
     summary: "What Axia says the iQ console is and what its displays and controls are for. The model name comes from a label in the station's photograph and has not been confirmed.",
     quickAnswer: {
-      text: "Axia describes iQ as a radio mixing console with 8 to 24 faders. A small display under each fader shows its current source, and the mixing itself is done in a separate engine unit, not in the desk.",
+      text: "Axia describes iQ as a radio mixing console with 8 to 24 faders, and says the mixing is done in a separate engine unit. The photo shows an iQ label; the model is not confirmed by the station.",
       status: "manufacturer-documented",
       sourceIds: [SOURCES.axiaIq.id],
     },
@@ -862,7 +862,7 @@ export const articles: KnowledgeArticle[] = [
       "Which controls presenters are expected to use, and which should be left alone.",
     ],
     sources: [SOURCES.photoConsole, SOURCES.axiaIq, SOURCES.developmentTeam],
-    relatedArticleIds: ["guide-studio-overview", "kb-axia-qor16"],
+    relatedArticleIds: ["guide-studio-overview"],
     relatedTopicIds: [],
     glossaryTermIds: ["fader"],
     revisions: [fromDocs("Axia iQ", "Created from the Axia iQ product page.")],
@@ -905,7 +905,7 @@ export const articles: KnowledgeArticle[] = [
     kind: "informational",
     summary: "What Axia says the QOR.16 is, from its product page. The model name comes from a label in the station's rack photograph and has not been confirmed.",
     quickAnswer: {
-      text: "Axia describes the QOR.16 as a console engine: one box holding the mixing engine, audio connections, power supply and network switch for a console. Its front-panel LED display shows power and network status.",
+      text: "Axia describes the QOR.16 as a console engine combining mixing, power supply and network switch, and says its front-panel LED display shows power and network status. The photo shows this label; the model is not confirmed by the station.",
       status: "manufacturer-documented",
       sourceIds: [SOURCES.axiaQor16.id],
     },
@@ -920,7 +920,7 @@ export const articles: KnowledgeArticle[] = [
       "What the unit does in this studio and whether presenters should ever touch it.",
     ],
     sources: [SOURCES.photoEquipmentRack, SOURCES.axiaQor16, SOURCES.developmentTeam],
-    relatedArticleIds: ["kb-axia-iq-console", "kb-telos-xnode2"],
+    relatedArticleIds: ["kb-telos-xnode2"],
     relatedTopicIds: [],
     glossaryTermIds: [],
     revisions: [fromDocs("Axia QOR.16", "Created from the Axia QOR.16 product page.")],
@@ -958,7 +958,7 @@ export const articles: KnowledgeArticle[] = [
     kind: "informational",
     summary: "What Telos Alliance says an xNode2 is, with its front-panel screen and lights, from the xNode2 manual. The model name comes from a label in the station's rack photograph and has not been confirmed.",
     quickAnswer: {
-      text: "Telos describes xNode2 as a half-rack box that converts audio between ordinary connections and network audio. Its front screen shows setup and status, and two lights show whether power comes from the network cable or the mains.",
+      text: "Telos describes xNode2 as a half-rack box converting audio between ordinary connections and network audio, and says its front screen shows setup and status. The photo shows an X-NODE 2 label; the model is not confirmed by the station.",
       status: "manufacturer-documented",
       sourceIds: [SOURCES.xnode2Intro.id, SOURCES.xnode2InDepth.id],
     },
@@ -1016,7 +1016,7 @@ export const articles: KnowledgeArticle[] = [
     kind: "informational",
     summary: "What Behringer says the MS16 is and what its controls and sockets are for, from its product page. The model name comes from a label in the station's photograph and has not been confirmed.",
     quickAnswer: {
-      text: "Behringer describes the MS16 as a pair of powered stereo speakers, 2 x 8 watts, with Volume, Bass and Treble controls. The maker says the speakers switch off automatically when headphones are plugged into the speaker's own PHONES socket.",
+      text: "Behringer describes the MS16 as a small personal monitor pair of powered stereo speakers with Volume, Bass and Treble controls. The photo shows MS16 labels; the model is not confirmed by the station.",
       status: "manufacturer-documented",
       sourceIds: [SOURCES.behringerMs16.id],
     },
@@ -1028,7 +1028,8 @@ export const articles: KnowledgeArticle[] = [
     openQuestions: [
       "Whether the station's speakers are the Behringer MS16 (the label is seen in a photograph only) and how many there are.",
       "Whether the studio uses the speakers' own sockets at all, and which control sets the speaker volume at this station.",
-      "Whether the speakers mute automatically when a microphone is live. Behringer's page describes no such feature and does not mention wall mounting.",
+      "Whether the speakers mute automatically when a microphone is live. Behringer's page describes no such feature.",
+      "Behringer's page describes a small personal monitor pair \u201cideally suited for home studios\u201d, but the station's photograph shows wall-mounted speakers. Whether these are the same product is not confirmed.",
     ],
     sources: [SOURCES.photoMonitorSpeaker, SOURCES.behringerMs16, SOURCES.developmentTeam],
     relatedArticleIds: ["ts-cant-hear-anything"],
@@ -1048,6 +1049,7 @@ export const articles: KnowledgeArticle[] = [
         sourceIds: [SOURCES.behringerMs16.id],
         body: [
           "Behringer describes the MS16 as an active (powered) 16-watt personal monitor system: two speakers with 4-inch woofers, each driven by an 8-watt amplifier.",
+          "Behringer presents it as a compact personal monitor pair \u201cideally suited for home studios\u201d, keyboard and vocal monitoring and similar uses. The page does not mention wall mounting, whereas the station's photograph shows wall-mounted speakers.",
           "It is magnetically shielded, and a speaker cable linking the two speakers is included.",
           "This describes the product in general. It does not say how this station's speakers are set up.",
         ],

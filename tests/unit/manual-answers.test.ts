@@ -264,6 +264,29 @@ describe("studio hardware explanations", () => {
     }
   });
 
+  it("each quick answer attributes its facts to the maker and says the model is not confirmed", () => {
+    for (const h of hardware) {
+      const t = byId(h.id).quickAnswer!.text;
+      expect(t, h.id).toMatch(/not (yet )?confirmed/i);
+      expect(t, h.id).toMatch(/\b(Axia|Telos|Behringer) (says|describes)\b/);
+    }
+    expect(byId("kb-behringer-ms16").quickAnswer!.text).toMatch(/photo/i);
+  });
+
+  it("iQ and QOR.16 articles are not cross-linked, since the sources do not pair them", () => {
+    expect(byId("kb-axia-iq-console").relatedArticleIds).not.toContain("kb-axia-qor16");
+    expect(byId("kb-axia-qor16").relatedArticleIds).not.toContain("kb-axia-iq-console");
+    expect(byId("kb-axia-qor16").relatedArticleIds).toContain("kb-telos-xnode2");
+  });
+
+  it("the MS16 article states the page describes a small personal monitor pair while the photo shows wall-mounted speakers", () => {
+    const a = byId("kb-behringer-ms16");
+    const text = [...a.sections.flatMap((s) => s.body), ...a.openQuestions].join(" ");
+    expect(text).toMatch(/personal monitor/i);
+    expect(text).toMatch(/home studios/i);
+    expect(text).toMatch(/wall-mounted/i);
+  });
+
   it("each is linked from, and links to, its equipment record", () => {
     for (const h of hardware) {
       expect(byId(h.id).equipmentIds, h.id).toContain(h.equipment);

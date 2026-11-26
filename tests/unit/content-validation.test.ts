@@ -202,3 +202,17 @@ describe("RT-002D answer schemas", () => {
     expect(validateContent(defaultContent, NOW)).toEqual([]);
   });
 });
+
+describe("source publisher", () => {
+  const withPublisher = (publisher: string) =>
+    withChanges((c) => {
+      c.articles.find((a) => a.id === "kb-behringer-ms16")!.sources[1]!.publisher = publisher;
+      return c;
+    });
+  it("accepts a one-word brand such as Behringer", () => {
+    expect(withPublisher("Behringer")).toEqual([]);
+  });
+  it.each(["TBC", "", "  ", "n/a", "unknown"])("rejects placeholder publisher %j", (p) => {
+    expect(withPublisher(p).join(" ")).toMatch(/publisher/);
+  });
+});

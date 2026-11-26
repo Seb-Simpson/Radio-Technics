@@ -4,6 +4,7 @@ import { ArrowRight, BookA, Crosshair, MessageSquare, Search, TriangleAlert, Wre
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useMemo, useState } from "react";
+import { QuickAnswer } from "@/components/knowledge/QuickAnswer";
 import { SourceLabel } from "@/components/knowledge/SourceLabel";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { VerificationBadge } from "@/components/ui/VerificationBadge";
@@ -39,6 +40,10 @@ export function KnowledgeCentre() {
     () => searchKnowledge(deferredQuery, { selectedEquipmentId: workspace.selectedEquipmentId, ignoreSelection }),
     [deferredQuery, workspace.selectedEquipmentId, ignoreSelection],
   );
+
+  /** Only the top result shows its quick answer inline; it is never shown for a lower-ranked article. */
+  const topResult = response.articles[0]?.article;
+  const topWithQuick = topResult?.quickAnswer ? topResult : undefined;
 
   return (
     <div className="flex flex-col gap-5">
@@ -167,8 +172,18 @@ export function KnowledgeCentre() {
               <h2 className="text-sm font-semibold text-ink-100">
                 {response.articles.length === 1 ? "1 article" : `${response.articles.length} articles`}
               </h2>
+              {topWithQuick && (
+                <div className="mt-2 flex flex-col gap-2">
+                  <h3 className="font-medium text-ink-50">
+                    <Link href={`/knowledge/${topWithQuick.id}`} className="underline underline-offset-2 hover:text-signal-300">
+                      {topWithQuick.title}
+                    </Link>
+                  </h3>
+                  <QuickAnswer article={topWithQuick} />
+                </div>
+              )}
               <ul className="mt-2 grid gap-3 md:grid-cols-2">
-                {response.articles.map(({ article, reasons }) => (
+                {response.articles.filter(({ article }) => article !== topWithQuick).map(({ article, reasons }) => (
                   <li key={article.id}>
                     <ArticleCard article={article} reason={reasons[0]} />
                   </li>

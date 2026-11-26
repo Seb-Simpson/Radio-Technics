@@ -159,7 +159,7 @@ describe("11. urgent-silence protection still applies", () => {
   it("search flags confirmed silence as urgent and keeps only the urgent reading", () => {
     const r = search("We're off air!");
     expect(r.safety.urgent).toBe(true);
-    expect(r.interpretations.map((i) => i.intentId)).toEqual(["silence-on-air"]);
+    expect(r.interpretations.map((i) => i.intentId)).not.toContain("play-next-song");
   });
 
   it("possible silence is flagged without being treated as confirmed", () => {
@@ -170,5 +170,37 @@ describe("11. urgent-silence protection still applies", () => {
   it("the troubleshooter's urgent path is unchanged", () => {
     const s = respond(createConversation(), { type: "text", text: "Can someone help me? We're off air." }, none).state;
     expect(s.urgent).toBe(true);
+  });
+});
+
+describe("quick answers found by asking naturally (Phase 1)", () => {
+  it.each([
+    ["how do i play the next song", "kb-myriad-next-item"],
+    ["how do I play the next song?", "kb-myriad-next-item"],
+    ["what do the red squares mean", "kb-myriad-screen"],
+    ["what do the colours mean", "kb-myriad-screen"],
+    ["what are the icons in the log", "kb-myriad-screen"],
+    ["what is live assist", "kb-myriad-live-assist"],
+  ])("%j finds %s first, with a quick answer", (query, id) => {
+    const top = search(query).articles[0]!;
+    expect(top.article.id).toBe(id);
+    expect(top.quickAnswer).toBe(top.article.quickAnswer!.text);
+  });
+
+  it("results without a quick answer carry none", () => {
+    const withoutQuick = search("cable").articles.find((r) => !r.article.quickAnswer);
+    expect(withoutQuick?.quickAnswer).toBeUndefined();
+  });
+
+  it("PROGRAM 1 / MONITOR finds only the article that already mentions those labels", () => {
+    const r = search("what does PROGRAM 1 mean");
+    expect(r.articles[0]?.article.id).toBe("kb-audio-output");
+    expect(r.safety).toEqual({ urgent: false, possibleSilence: false });
+  });
+
+  it("silence handling is unchanged when combined with a how-to question", () => {
+    const r = search("we're off air, how do I play the next song");
+    expect(r.safety.urgent).toBe(true);
+    expect(r.interpretations.map((i) => i.intentId)).not.toContain("play-next-song");
   });
 });

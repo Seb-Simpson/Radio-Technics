@@ -157,6 +157,31 @@ describe("quick answers and manual labels", () => {
     expect(screen.queryByText(article.summary)).toBeNull();
   });
 
+  it("shows the top result's quick answer inline, with its manual label and original link", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<KnowledgeCentre />);
+    await user.type(screen.getByLabelText("Describe the problem, or search for a topic"), "how do i play the next song");
+    const results = await screen.findByRole("region", { name: "Search results" });
+    const article = articles.find((a) => a.id === "kb-myriad-next-item")!;
+    const heading = within(results).getByRole("heading", { name: "Quick answer" });
+    const block = heading.closest("section")!;
+    expect(within(block).getByText(article.quickAnswer!.text)).toBeInTheDocument();
+    expect(within(block).getByText("From the Myriad 6 manual")).toBeInTheDocument();
+    expect(within(block).getByRole("link", { name: /Read the original/ })).toHaveAttribute("href", expect.stringMatching(/^https:\/\//));
+    expect(within(results).getByRole("link", { name: article.title })).toHaveAttribute("href", "/knowledge/kb-myriad-next-item");
+    expect(within(results).getAllByText(article.quickAnswer!.text)).toHaveLength(1);
+  });
+
+  it("shows the urgent alert before any quick answer", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<KnowledgeCentre />);
+    await user.type(screen.getByLabelText("Describe the problem, or search for a topic"), "we're off air, how do I play the next song");
+    const results = await screen.findByRole("region", { name: "Search results" });
+    const alert = await within(results).findByRole("alert");
+    const quick = within(results).queryByRole("heading", { name: "Quick answer" });
+    if (quick) expect(alert.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("the equipment panel lists manual quick answers for Myriad, and omits the section otherwise", () => {
     const { unmount } = render(<EquipmentPanel equipmentId="myriad-playout" onClose={() => {}} />);
     const heading = screen.getByRole("heading", { name: "From the manual" });

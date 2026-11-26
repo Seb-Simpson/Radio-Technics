@@ -1,5 +1,14 @@
 # Phase Status
 
+## Phase 1 — Answers from the manual
+
+**Status:** Implemented and tested; not engineer-verified. Search results, article pages, the equipment panel and troubleshooter outcomes now show short answers taken from manufacturer documentation read on 2026-11-26, each labelled "From the <product> manual" (or "product page") with a link to the original.
+**Branch:** `feat/studio-experience-redesign`. Not merged, not deployed.
+
+- **What was read:** seven Myriad 6 help pages; the Axia iQ, Axia QOR.16 and Behringer MS16 product pages (not their manuals); two Telos xNode2 manual chapters. See `docs/ENGINEER_REVIEW.md` and `EQUIPMENT.md` for the full list with dates.
+- **Troubleshooter:** at a normal outcome it lists "What the manual says" links (information only) after the technical-support message. Never shown on the urgent outcome or while an incident is open. Flows and the engine are unchanged.
+- **Still needs the station engineer:** green button vs Myriad's Go; whether stop chains are used; the MS16 model and mounting mismatch; QOR.16 vs iQ/StudioCore; the xNode2 variant; normal vs fault indicators; and the PDFs that were not read.
+
 ## RT-003 — Knowledge base & intelligent search foundation
 
 **Status:** Implemented and tested. Official Myriad documentation could **not** be read (network policy blocked `www.broadcastradio.com` and `help.broadcastradio.com`); sources are listed as "not yet read" and no manufacturer content was written. Nothing is engineer-verified.

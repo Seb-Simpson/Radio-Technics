@@ -3,7 +3,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { QuickAnswer } from "@/components/knowledge/QuickAnswer";
 import { ShowInStudioButton } from "@/components/knowledge/ShowInStudioButton";
+import { SourceLabel } from "@/components/knowledge/SourceLabel";
 import { StartTopicButton } from "@/components/knowledge/StartTopicButton";
 import { PageContainer } from "@/components/shell/PageContainer";
 import { Notice } from "@/components/ui/Notice";
@@ -13,6 +15,7 @@ import { getGlossaryTerm } from "@/data/glossary";
 import { troubleshootingTopics } from "@/data/troubleshooting-flows";
 import { getEquipmentById } from "@/lib/content/equipment";
 import { articleKindLabels, articleTypeLabels, sourceKindLabels } from "@/lib/knowledge/labels";
+import { sectionManualSource } from "@/lib/knowledge/manual-label";
 import { getArticleById, getArticles } from "@/lib/knowledge/search";
 
 interface Props {
@@ -112,6 +115,8 @@ export default async function ArticlePage({ params }: Props) {
             </Notice>
           )}
 
+          <QuickAnswer article={article} />
+
           {article.symptoms.length > 0 && (
             <Block id="symptoms" title="How presenters might describe this">
               <Bullets items={article.symptoms.map((s) => `“${s}”`)} />
@@ -119,13 +124,16 @@ export default async function ArticlePage({ params }: Props) {
           )}
 
           <div className="flex flex-col gap-6">
-            {article.sections.map((section, index) => (
+            {article.sections.map((section, index) => {
+              const manualSource = sectionManualSource(section, article.sources);
+              return (
               <section key={section.heading} aria-labelledby={`section-${index}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 id={`section-${index}`} className="text-lg font-semibold text-ink-50">
                     {section.heading}
                   </h2>
                   <VerificationBadge status={section.status} />
+                  {manualSource && <SourceLabel source={manualSource} />}
                 </div>
                 <div className="mt-2">
                   {section.body.length > 1 ? <Bullets items={section.body} /> : <p className="text-[15px] leading-relaxed text-ink-200">{section.body[0]}</p>}
@@ -134,7 +142,8 @@ export default async function ArticlePage({ params }: Props) {
                   <p className="mt-1.5 text-[12px] text-ink-400">Source: {section.sourceIds.map(sourceTitle).join("; ")}</p>
                 )}
               </section>
-            ))}
+              );
+            })}
           </div>
 
           {article.diagnosticQuestions.length > 0 && (

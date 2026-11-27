@@ -8,6 +8,7 @@ import type { FlowNode, TroubleshootingTopic } from "@/lib/troubleshooter/types"
 import type { AudioClaim } from "@/lib/troubleshooter/understand";
 import type { GlossaryTerm, SourceKind } from "@/types";
 import type { EquipmentRecord, Fact, Hotspot, KnowledgeArticle, ReviewRecord, StudioView, VerificationStatus } from "@/types";
+import { QUICK_ANSWER_MAX_WORDS } from "@/lib/knowledge/manual-label";
 import { validateRegion } from "./geometry";
 
 export interface ContentIssue {
@@ -54,6 +55,13 @@ export function isMeaningfulProvenance(value: unknown): boolean {
   if (PLACEHOLDER.test(text)) return false;
   const words = text.split(/\s+/).filter((w) => /[a-z]{2,}/i.test(w));
   return words.length >= 2 && text.replace(/[^a-z]/gi, "").length >= 6;
+}
+
+/** A source publisher only needs to be a real name: a one-word brand such as "Behringer" is fine, placeholders are not. */
+export function isMeaningfulPublisher(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  return text.length >= 2 && !PLACEHOLDER.test(text) && /[a-z]{2,}/i.test(text);
 }
 
 /** A reviewer must be identifiable: a name, or a name with a role — not a bare role or placeholder. */
@@ -214,7 +222,7 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
       if (src.retrievedOn !== null && (!isValidIsoDate(src.retrievedOn) || src.retrievedOn > todayIso(now))) {
         a([`${article.id} source "${src.id}" has an invalid retrieval date`]);
       }
-      if (!isMeaningfulProvenance(src.publisher)) a([`${article.id} source "${src.id}" needs a meaningful publisher`]);
+      if (!isMeaningfulPublisher(src.publisher)) a([`${article.id} source "${src.id}" needs a meaningful publisher`]);
     }
     const citesReadManufacturer = (ids: string[] | undefined) =>
       (ids ?? []).some((id) => sourceById.get(id)?.kind === "manufacturer" && sourceById.get(id)?.retrievedOn !== null);
@@ -234,6 +242,24 @@ export function validateContent(content: ContentBundle = defaultContent, now: Da
     });
     if (article.status === "manufacturer-documented" && !article.sections.some((sec) => citesReadManufacturer(sec.sourceIds))) {
       a([`${article.id} is marked manufacturer-documented but cites no manufacturer source that has been read`]);
+    }
+
+    const quick = article.quickAnswer;
+    if (quick) {
+      const qa = `${article.id} quick answer`;
+      if (!quick.text.trim()) a([`${qa} has no text`]);
+      if (quick.sourceIds.length === 0) a([`${qa} cites no source`]);
+      if (quick.text.trim().split(/\s+/).filter(Boolean).length > QUICK_ANSWER_MAX_WORDS) {
+        a([`${qa} is longer than ${QUICK_ANSWER_MAX_WORDS} words`]);
+      }
+      for (const id of quick.sourceIds) {
+        if (!sourceById.has(id)) a([`${qa} cites unknown source "${id}"`]);
+      }
+      if (quick.status === "manufacturer-documented") {
+        if (!citesReadManufacturer(quick.sourceIds)) a([`${qa} is marked manufacturer-documented but cites a manufacturer source that hasn't been read`]);
+        if (article.kind === "approved-procedure") a([`${article.id} is an approved procedure; its quick answer cannot be manufacturer-documented`]);
+      }
+      a(checkVerification(qa, quick.status, quick.status === "verified" ? article.review : undefined, now));
     }
 
     // Only engineer-approved content may be presented as a procedure.

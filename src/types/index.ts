@@ -168,6 +168,10 @@ export interface SourceReference {
    * have been read before anything can be marked manufacturer-documented.
    */
   retrievedOn: string | null;
+  /** Product the source documents (e.g. "Myriad 6"); used for the "From the … manual" label. */
+  product?: string;
+  /** What kind of page a manufacturer source is. Absent means "manual". */
+  documentType?: "manual" | "product-page";
   note?: string;
 }
 
@@ -234,4 +238,13 @@ export interface KnowledgeArticle {
   glossaryTermIds: string[];
   /** Newest last. */
   revisions: ArticleRevision[];
+  /** A short, labelled answer shown ahead of the full article. */
+  quickAnswer?: QuickAnswer;
+}
+
+export interface QuickAnswer {
+  text: string;
+  status: VerificationStatus;
+  /** IDs of the article's `sources` this answer is taken from. */
+  sourceIds: string[];
 }

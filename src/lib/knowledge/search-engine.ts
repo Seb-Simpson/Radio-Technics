@@ -38,6 +38,8 @@ export interface ArticleResult {
   article: KnowledgeArticle;
   score: number;
   reasons: string[];
+  /** The article's quick-answer text, if it has one. Display it with its source label (see QuickAnswer). */
+  quickAnswer?: string;
 }
 
 export type SearchStatus = "empty" | "results" | "clarify" | "needs-equipment" | "no-match";
@@ -315,7 +317,7 @@ export function searchKnowledge(rawQuery: string, context: SearchContext, source
   // 4. Articles: from plausible interpretations, plus lexical matches, plus equipment relevance.
   const scores = new Map<string, ArticleResult>();
   const bump = (article: KnowledgeArticle, amount: number, reason: string) => {
-    const entry = scores.get(article.id) ?? { article, score: 0, reasons: [] };
+    const entry = scores.get(article.id) ?? { article, score: 0, reasons: [], quickAnswer: article.quickAnswer?.text };
     entry.score += amount;
     if (!entry.reasons.includes(reason)) entry.reasons.push(reason);
     scores.set(article.id, entry);

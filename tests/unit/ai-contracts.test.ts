@@ -36,7 +36,7 @@ function request(message: string, selectedEquipmentId: string | null = null): As
 }
 const open: PreModelDecision = { urgent: false, fixedReply: null };
 const greenReq = () => request("the green button stopped working");
-const NOW = new Date("2026-11-05T12:00:00Z");
+const NOW = new Date("2026-11-26T12:00:00Z");
 const TRUSTED_TEXT = new Set<string>([...CLARIFICATION_QUESTIONS.values(), ...FALLBACK_REPLIES.values(), ARTICLES_INTRO, PROCEDURE_REPLY]);
 
 describe("before any model call (deterministic)", () => {

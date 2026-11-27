@@ -8,7 +8,7 @@ import { validateWorkspaceCommand } from "@/lib/workspace/commands";
 import type { ContentBundle } from "@/lib/content/validate";
 import type { ReviewRecord } from "@/types";
 
-const NOW = new Date("2026-11-02T12:00:00Z");
+const NOW = new Date("2026-11-26T12:00:00Z");
 const goodReview: ReviewRecord = { reviewer: "Station engineer (J. Smith)", date: "2026-10-30", source: "Walkthrough in studio" };
 
 function withChanges(change: (c: ContentBundle) => ContentBundle) {
@@ -200,5 +200,19 @@ describe("RT-002D answer schemas", () => {
 
   it("the real flows pass", () => {
     expect(validateContent(defaultContent, NOW)).toEqual([]);
+  });
+});
+
+describe("source publisher", () => {
+  const withPublisher = (publisher: string) =>
+    withChanges((c) => {
+      c.articles.find((a) => a.id === "kb-behringer-ms16")!.sources[1]!.publisher = publisher;
+      return c;
+    });
+  it("accepts a one-word brand such as Behringer", () => {
+    expect(withPublisher("Behringer")).toEqual([]);
+  });
+  it.each(["TBC", "", "  ", "n/a", "unknown"])("rejects placeholder publisher %j", (p) => {
+    expect(withPublisher(p).join(" ")).toMatch(/publisher/);
   });
 });

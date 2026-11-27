@@ -10,7 +10,7 @@ import { SOURCES } from "@/data/sources";
 import { defaultContent, validateContent, type ContentBundle } from "@/lib/content/validate";
 import type { ReviewRecord } from "@/types";
 
-const NOW = new Date("2026-11-02T12:00:00Z");
+const NOW = new Date("2026-11-26T12:00:00Z");
 const review: ReviewRecord = { reviewer: "Jo Smith (station engineer)", date: "2026-10-30", source: "Studio walkthrough with the engineer" };
 const messages = (change: (c: ContentBundle) => ContentBundle) => validateContent(change(structuredClone(defaultContent)), NOW).map((i) => i.message).join("\n");
 const article = (c: ContentBundle, id: string) => c.articles.find((a) => a.id === id)!;
@@ -27,15 +27,22 @@ describe("shipped knowledge content", () => {
     }
   });
 
-  it("does not claim manufacturer documentation that hasn't been read", () => {
+  it("does not claim manufacturer documentation beyond what has been read", () => {
     for (const a of articles) {
       expect(a.status).not.toBe("manufacturer-documented");
-      for (const s of a.sections) expect(s.status, `${a.id}: ${s.heading}`).not.toBe("manufacturer-documented");
+      for (const s of a.sections.filter((sec) => sec.status === "manufacturer-documented")) {
+        const cited = (s.sourceIds ?? []).map((id) => a.sources.find((src) => src.id === id));
+        expect(cited.length, `${a.id}: ${s.heading}`).toBeGreaterThan(0);
+        for (const src of cited) {
+          expect(src?.kind, `${a.id}: ${s.heading}`).toBe("manufacturer");
+          expect(src?.retrievedOn, `${a.id}: ${s.heading}`).toBe("2026-11-26");
+        }
+      }
     }
     for (const src of [SOURCES.myriadSupport, SOURCES.myriadDashboard, SOURCES.myriadPlaying]) {
       expect(src.kind).toBe("manufacturer");
-      expect(src.retrievedOn).toBeNull();
-      expect(src.note).toMatch(/Not yet read/);
+      expect(src.retrievedOn).toBe("2026-11-26");
+      expect(src.note).toMatch(/^Read 2026-11-26/);
     }
   });
 
@@ -56,9 +63,11 @@ describe("shipped knowledge content", () => {
     expect(goArticle.openQuestions.join(" ")).toMatch(/same function/);
   });
 
-  it("glossary terms for Myriad features don't define them from memory", () => {
+  it("glossary terms for Myriad features come from the read manual and are not station-verified", () => {
     for (const id of ["stop-chain", "go-function"]) {
-      expect(glossary.find((t) => t.id === id)!.definition).toMatch(/once that has been read/);
+      const term = glossary.find((t) => t.id === id)!;
+      expect(term.source).toMatch(/Myriad 6 help pages/);
+      expect(term.status).toBe("draft");
     }
   });
 });
@@ -67,6 +76,7 @@ describe("manufacturer documentation is not engineer approval", () => {
   it("rejects manufacturer-documented content citing an unread manufacturer source", () => {
     expect(
       messages((c) => {
+        article(c, "kb-myriad-screen").sources.find((s) => s.id === "myriad-6-dashboard")!.retrievedOn = null;
         article(c, "kb-myriad-screen").sections[0]!.status = "manufacturer-documented";
         article(c, "kb-myriad-screen").sections[0]!.sourceIds = ["myriad-6-dashboard"];
         return c;

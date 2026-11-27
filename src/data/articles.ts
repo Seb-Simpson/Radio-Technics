@@ -8,10 +8,12 @@ import { SOURCES } from "./sources";
  * - Nothing here is engineer-verified yet, and no article is an approved
  *   procedure. Articles explain, list symptoms and diagnostic questions, and
  *   keep unresolved technical questions separate.
- * - The official Myriad 6 pages are listed as sources but have NOT been read
- *   yet (network access to broadcastradio.com was unavailable in RT-003), so
- *   no section is "manufacturer-documented". Screen details come from the
- *   station's photograph and are labelled as observations.
+ * - The official Myriad 6 help pages were read on 2026-11-26 (see sources.ts).
+ *   Sections that summarise them are "manufacturer-documented" and written in
+ *   the team's own words; that describes what Myriad does in general, not how
+ *   this station has set it up, and is not station verification. Screen
+ *   details come from the station's photograph and are labelled as
+ *   observations.
  * - Never present manufacturer documentation as permission to operate or
  *   change the station's equipment.
  */
@@ -25,16 +27,10 @@ const MYRIAD_6: SoftwareApplicability = {
 const created = (summary: string): ArticleRevision => ({ date: "2026-11-02", author: "Radio Technics development team", summary });
 const RT001 = created("First version (RT-001).");
 const RT003 = created("Restructured for RT-003: symptoms, diagnostic questions, sources and open questions added.");
-const RT003_NEW = created("Created in RT-003. Official Myriad documentation listed but not yet read.");
-
-const OFFICIAL_PENDING = {
-  heading: "Official Myriad documentation",
-  status: "draft" as const,
-  sourceIds: [SOURCES.myriadSupport.id],
-  body: [
-    "The manufacturer's Myriad 6 help pages are listed below as sources but have not been read yet, so this article does not describe how Myriad works beyond what the station has told us and what is visible in its photograph.",
-  ],
-};
+const RT003_NEW = created("Created in RT-003.");
+const MANUAL_DATE = "2026-11-26";
+const fromDocs = (product: string, summary: string): ArticleRevision => ({ date: MANUAL_DATE, author: `Development team (from ${product} documentation)`, summary });
+const fromManual = (summary: string): ArticleRevision => ({ date: MANUAL_DATE, author: "Development team (from Myriad 6 manual)", summary });
 
 export const articles: KnowledgeArticle[] = [
   /* ---------------------------------------------------------------- */
@@ -112,11 +108,16 @@ export const articles: KnowledgeArticle[] = [
       "What happens if it is pressed more than once.",
       "Whether the small hole above the button is an indicator light.",
     ],
-    sources: [SOURCES.stationBriefing, SOURCES.photoGreenButton, SOURCES.myriadSupport],
+    sources: [SOURCES.stationBriefing, SOURCES.photoGreenButton, SOURCES.myriadSupport, SOURCES.myriadDashboard],
     relatedArticleIds: ["kb-myriad-go-and-button", "ts-next-song-wont-play", "kb-myriad-live-assist"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["live-assist", "go-function"],
-    revisions: [RT001, RT003],
+    revisions: [RT001, RT003, fromManual("Added a short answer and what Myriad's manual says its own Go control does.")],
+    quickAnswer: {
+      text: "The station reports that the green button moves Myriad on to the next song. How it is connected, and whether it does the same as Myriad's on-screen Go, is not confirmed.",
+      status: "station-reported",
+      sourceIds: [SOURCES.stationBriefing.id],
+    },
     sections: [
       {
         heading: "What it does",
@@ -129,6 +130,15 @@ export const articles: KnowledgeArticle[] = [
         status: "draft",
         sourceIds: [SOURCES.photoGreenButton.id],
         body: ["In the station's photograph it is a black box with a large green push button and a small hole above it."],
+      },
+      {
+        heading: "Myriad's own Go control (from the manual)",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id],
+        body: [
+          "Myriad's dashboard has a Go control that starts the next log item by hand. The manual does not mention the station's green button.",
+          "Whether the green button does the same job as Go has not been confirmed, so Radio Technics does not assume it.",
+        ],
       },
     ],
   },
@@ -214,17 +224,27 @@ export const articles: KnowledgeArticle[] = [
       "Is the current song still playing, or is there silence?",
     ],
     openQuestions: ["How Myriad decides what plays next at this station in Live Assist mode."],
-    sources: [SOURCES.stationBriefing, SOURCES.myriadPlaying, SOURCES.developmentTeam],
+    sources: [SOURCES.stationBriefing, SOURCES.myriadPlaying, SOURCES.myriadDashboard, SOURCES.developmentTeam],
     relatedArticleIds: ["kb-myriad-next-item", "kb-myriad-live-assist", "guide-green-button"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["live-assist", "log", "dead-air"],
-    revisions: [RT001, RT003],
+    revisions: [RT001, RT003, fromManual("Added what the manual says about how Myriad moves on. No quick answer: the silence guidance leads this article.")],
     sections: [
       {
         heading: "If there is silence on air",
         status: "draft",
         sourceIds: [SOURCES.developmentTeam.id],
         body: ["Contact technical support straight away and follow any emergency procedure the station has in place. The troubleshooter treats this as urgent."],
+      },
+      {
+        heading: "How the manual says Myriad moves on",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
+        body: [
+          "How one log item leads into the next depends on its end type. A Go item flows into the next on its own. A Stop item plays to its end and then waits until Go is pressed. A sweeper is tucked into the next item's intro when the next item has one.",
+          "In Live Assist, Myriad cues the next item automatically about 30 seconds before it is needed.",
+          "The manual does not give any fault-finding steps, so this section does not say what to do.",
+        ],
       },
       {
         heading: "No approved fix yet",
@@ -342,7 +362,12 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "What the station has told us about running Myriad in Live Assist mode, and what still needs the official documentation.",
+    summary: "What Myriad's manual says Live Assist mode is, and what the station has told us about how it uses it.",
+    quickAnswer: {
+      text: "In Live Assist, the presenter controls how items join. Myriad cues the next item ahead of time, but an item set to Stop waits at its end until the presenter starts the next one.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
+    },
     equipmentIds: ["myriad-playout", "green-next-button"],
     status: "station-reported",
     keywords: ["live assist", "mode", "automation", "auto", "manual", "play mode"],
@@ -356,11 +381,11 @@ export const articles: KnowledgeArticle[] = [
       "Whether any items are set to play on automatically in Live Assist mode.",
       "Whether the other modes shown on screen (Standby, AutoFade) are ever used.",
     ],
-    sources: [SOURCES.stationBriefing, SOURCES.photoMyriadScreen, SOURCES.myriadSupport, SOURCES.developmentTeam],
+    sources: [SOURCES.stationBriefing, SOURCES.photoMyriadScreen, SOURCES.myriadSupport, SOURCES.myriadDashboard, SOURCES.myriadPlaying, SOURCES.myriadLogIcons, SOURCES.developmentTeam],
     relatedArticleIds: ["kb-myriad-screen", "kb-myriad-next-item", "guide-green-button"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["live-assist", "automation", "playout"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on play modes.")],
     sections: [
       {
         heading: "What the station has told us",
@@ -382,7 +407,18 @@ export const articles: KnowledgeArticle[] = [
         sourceIds: [SOURCES.photoMyriadScreen.id],
         body: ["In the station's photograph, the Myriad screen has play-mode buttons labelled Standby, Live and AutoFade."],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says about the play modes",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id, SOURCES.myriadLogIcons.id],
+        body: [
+          "Myriad has three play modes: Live Assist, AutoFade and Standby. They are chosen from a dropdown on the dashboard or with the Play Mode buttons on the Log ribbon.",
+          "In Live Assist the presenter controls how one item leads into the next, using stop chains and the Go button. Stop chains are only available in this mode.",
+          "In AutoFade every item flows on automatically. In Standby Myriad is idle and is not playing from the log.",
+          "In Live Assist, Myriad cues the next log item automatically about 30 seconds before it is needed. The manual says this timing can be configured.",
+          "This describes Myriad in general. It does not say how the station's logs are set up.",
+        ],
+      },
     ],
   },
   {
@@ -392,7 +428,12 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "A guided look at the Myriad screen as it appears in the station's photograph, including the coloured squares whose meaning is not yet confirmed.",
+    summary: "A guided look at the Myriad screen: what the manual says the dashboard shows, and the coloured squares in the station's photograph whose meaning is not confirmed.",
+    quickAnswer: {
+      text: "The manual says each log item shows how it joins the next: a green circle is Go, a red square is Stop, a yellow plus is a sweeper. It does not state any error or fault colour.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadDashboard.id],
+    },
     equipmentIds: ["myriad-playout", "studio-computers"],
     status: "draft",
     keywords: ["dashboard", "screen", "display", "red square", "green square", "colour", "countdown", "clock", "on-air"],
@@ -403,15 +444,15 @@ export const articles: KnowledgeArticle[] = [
       "Has the screen changed compared with how it usually looks?",
     ],
     openQuestions: [
-      "What the red and green squares beside items mean.",
+      "Whether the small red and green squares beside items in the station's photograph are the Stop and Go symbols the manual describes.",
       "What the large red square beside the countdown means.",
       "What the green “On-Air” indicator at the top right shows.",
     ],
-    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadDashboard, SOURCES.developmentTeam, SOURCES.myriadSupport],
+    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadDashboard, SOURCES.myriadLogIcons, SOURCES.developmentTeam, SOURCES.myriadSupport],
     relatedArticleIds: ["kb-myriad-now-playing", "kb-myriad-playback-status", "kb-myriad-players"],
     relatedTopicIds: [],
     glossaryTermIds: ["log", "player"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on the dashboard and chain symbols.")],
     sections: [
       {
         heading: "What is visible in the station's photograph",
@@ -429,10 +470,21 @@ export const articles: KnowledgeArticle[] = [
         status: "draft",
         sourceIds: [SOURCES.developmentTeam.id],
         body: [
-          "Not yet known. The official Myriad dashboard documentation has not been read, and the station hasn't explained the colours. Radio Technics will not guess — if a colour worries you, ask technical support.",
+          "The manual explains the green circle, red square and yellow plus (see the next section), but it does not say that the squares in the station's photograph are those symbols, and that is not confirmed. It gives no meaning for the large red square beside the countdown or the green “On-Air” label, and no colour for faults. Radio Technics will not guess — if a colour worries you, ask technical support.",
         ],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says the dashboard shows",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id],
+        body: [
+          "The dashboard sits above the log in most layouts. It shows what is playing, what is coming and how items join.",
+          "Now Playing shows the title, artist and a media-type icon, with a progress bar that fills as the item plays and the time remaining beside it. The intro length appears in brackets.",
+          "Each item carries a symbol for how it ends: a green circle means Go (flow straight into the next item), a red square means Stop (wait at the end until Go is pressed) and a yellow plus means sweeper (tuck into the next item's intro, if it has one).",
+          "A bar along the bottom shows the time left in the hour, the date and time, the show name and whether the show is running over or under time. In Live Assist it also shows the time to the next stop chain.",
+          "The manual does not describe any colour for errors or faults, or what a stalled dashboard looks like.",
+        ],
+      },
     ],
   },
   {
@@ -442,18 +494,23 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "How to tell what is lined up to play next, from what the station's photograph shows.",
+    summary: "How to tell what is lined up to play next, from the manual and the station's photograph.",
+    quickAnswer: {
+      text: "The dashboard shows what is playing and what comes next. In Live Assist, Myriad cues the next log item automatically about 30 seconds before it is needed; the manual says this timing can be configured.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
+    },
     equipmentIds: ["myriad-playout"],
     status: "draft",
     keywords: ["next item", "log", "playlist", "up next", "running order", "what's next"],
     symptoms: ["What's playing next?", "The wrong song came on", "The next song is missing"],
     diagnosticQuestions: ["Is there an item listed after the one that's playing?", "Does the list look different from usual?"],
     openQuestions: ["How the next item is chosen at this station in Live Assist mode.", "Whether presenters may change the order of the log."],
-    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadPlaying, SOURCES.myriadSupport],
+    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadPlaying, SOURCES.myriadDashboard, SOURCES.myriadSupport],
     relatedArticleIds: ["ts-next-song-wont-play", "kb-myriad-screen"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["log"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on upcoming items.")],
     sections: [
       {
         heading: "What the photograph shows",
@@ -461,7 +518,18 @@ export const articles: KnowledgeArticle[] = [
         sourceIds: [SOURCES.photoMyriadScreen.id],
         body: ["Under the item playing, the Myriad screen lists the following items, each with a start time."],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says about upcoming items",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
+        body: [
+          "The dashboard shows what is playing, what is coming and how the items join.",
+          "Each upcoming item has quick-action buttons, numbered to a player: play now, cue for preview, dump (remove it from the log) and view its information.",
+          "How the next item starts depends on the end type of the item before it: Go flows on automatically, Stop waits until Go is pressed, and a sweeper is tucked into the next item's intro when it fits.",
+          "In Live Assist, Myriad cues the next log item automatically about 30 seconds before it is needed.",
+          "The manual does not say how the station's logs are set up.",
+        ],
+      },
     ],
   },
   {
@@ -471,7 +539,12 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "A Myriad topic that has not yet been explained from the official documentation.",
+    summary: "What a stop chain is, according to the Myriad 6 manual.",
+    quickAnswer: {
+      text: "A stop chain, shown as a red square on a log item, makes Myriad stop when that item ends and wait until the presenter presses Go. The manual says stop chains are only available in Live Assist mode.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id],
+    },
     equipmentIds: ["myriad-playout"],
     status: "draft",
     keywords: ["stop chain", "stop", "chain", "stopped", "paused"],
@@ -481,21 +554,31 @@ export const articles: KnowledgeArticle[] = [
       "Is anything unusual shown beside the next item in the list?",
     ],
     openQuestions: ["Whether the station's logs use stop chains, and what presenters should expect when one is reached."],
-    sources: [SOURCES.myriadSupport, SOURCES.developmentTeam],
+    sources: [SOURCES.myriadDashboard, SOURCES.myriadPlaying, SOURCES.myriadLogIcons, SOURCES.myriadSupport, SOURCES.developmentTeam],
     relatedArticleIds: ["kb-myriad-live-assist", "ts-next-song-wont-play"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["stop-chain"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on stop chains.")],
     sections: [
       {
-        heading: "Not yet explained",
+        heading: "At this station",
         status: "draft",
         sourceIds: [SOURCES.developmentTeam.id],
         body: [
-          "The RT-003 brief lists stop chains as a Myriad topic. Radio Technics has not read the official explanation yet, so this article does not say how they work. The questions below help describe what happened to technical support.",
+          "It is not confirmed which of the station's items use stop chains, so Radio Technics does not assume any do. The questions below help describe what happened to technical support.",
         ],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says about stop chains",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id, SOURCES.myriadLogIcons.id],
+        body: [
+          "Every log item has an end type: Go, Stop or sweeper (a short item that Myriad tries to tuck into the next item's intro). Stop is the red square. An item with a Stop chain plays to its end and then Myriad waits for a manual action.",
+          "The manual's example is a live voice link: the item is set to Stop, and the presenter presses Go afterwards to carry on.",
+          "The Go button starts the next log item. When the log is waiting at a stop chain, with the item finished and the next one ready, Go starts that next item.",
+          "Stop chains are only available in Live Assist mode. In AutoFade every item is Go. In Live Assist the bar at the bottom of the dashboard shows the time to the next stop chain.",
+        ],
+      },
     ],
   },
   {
@@ -505,7 +588,12 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "Why Radio Technics does not assume the green button and Myriad's Go function are the same thing.",
+    summary: "What Myriad's Go does according to the manual, and why Radio Technics does not assume the green button is the same thing.",
+    quickAnswer: {
+      text: "On Myriad's dashboard, Go starts the next log item; by default it fades out whatever is playing. Whether the station's green button does the same job is not confirmed.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadDashboard.id],
+    },
     equipmentIds: ["myriad-playout", "green-next-button"],
     status: "draft",
     keywords: ["go", "go button", "play next", "green button", "next"],
@@ -515,11 +603,11 @@ export const articles: KnowledgeArticle[] = [
       "Whether the physical green button triggers the same function as any on-screen Myriad control.",
       "How the button is wired to the Myriad computer.",
     ],
-    sources: [SOURCES.stationBriefing, SOURCES.myriadSupport, SOURCES.developmentTeam],
+    sources: [SOURCES.stationBriefing, SOURCES.myriadDashboard, SOURCES.myriadPlaying, SOURCES.myriadLogIcons, SOURCES.myriadSupport, SOURCES.developmentTeam],
     relatedArticleIds: ["guide-green-button", "kb-myriad-live-assist"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["go-function", "live-assist"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on Go.")],
     sections: [
       {
         heading: "What we know",
@@ -532,10 +620,19 @@ export const articles: KnowledgeArticle[] = [
         status: "draft",
         sourceIds: [SOURCES.developmentTeam.id],
         body: [
-          "Myriad's documentation describes a Go function, but it has not been read for this app yet. Until the engineer confirms how the button is connected, Radio Technics treats the button and any on-screen control as separate things that may behave differently.",
+          "Myriad's manual describes a Go function (see below), but it does not mention the station's green button. Until the engineer confirms how the button is connected, it is not confirmed that the button does the same as Go, and Radio Technics treats the button and any on-screen control as separate things that may behave differently.",
         ],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says Go does",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlaying.id, SOURCES.myriadLogIcons.id],
+        body: [
+          "Go is a dashboard button that starts the next log item by hand. If something is playing, it fades that out by default and starts the next item.",
+          "When the log is waiting at a stop chain, with the item finished and the next one ready, Go starts that next item. The manual also describes using Go to carry on after a live segment or voice link.",
+          "Go is also the name of an end type, shown as a green circle, where an item flows into the next on its own.",
+        ],
+      },
     ],
   },
   {
@@ -545,18 +642,23 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "Where the station's photograph shows the item that's playing.",
+    summary: "Where to see the item that's playing, from the manual and the station's photograph.",
+    quickAnswer: {
+      text: "The manual says Now Playing shows the item's title, artist and media-type icon, a progress bar that fills as it plays, and the time remaining. The intro length is shown in brackets.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadDashboard.id],
+    },
     equipmentIds: ["myriad-playout"],
     status: "draft",
     keywords: ["now playing", "current song", "playing now", "what's playing", "countdown"],
     symptoms: ["What's playing right now?", "Is anything playing?"],
     diagnosticQuestions: ["Is a song title shown at the top with a countdown beside it?", "Is the countdown going down?"],
     openQuestions: ["Which part of the screen presenters should rely on to see what is on air."],
-    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadDashboard, SOURCES.myriadSupport],
+    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadDashboard, SOURCES.myriadPlayers, SOURCES.myriadSupport],
     relatedArticleIds: ["kb-myriad-screen", "kb-myriad-playback-status"],
     relatedTopicIds: [],
     glossaryTermIds: ["player"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on Now Playing.")],
     sections: [
       {
         heading: "What the photograph shows",
@@ -566,7 +668,17 @@ export const articles: KnowledgeArticle[] = [
           "At the top of the Myriad screen, the song playing is shown with its artist and a countdown. One of the player areas at the bottom showed the same song with a waveform and a progress bar.",
         ],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says Now Playing shows",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlayers.id],
+        body: [
+          "Now Playing shows the item's title and artist and a media-type icon. A progress bar fills as the item plays, with the time remaining to its right. The intro length appears in brackets.",
+          "Near the end of the item the countdown becomes more prominent.",
+          "Each player also shows count-up and countdown timers.",
+          "The manual does not say which part of the screen presenters should rely on to confirm what is on air.",
+        ],
+      },
     ],
   },
   {
@@ -576,7 +688,12 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "Signs on the Myriad screen that suggest whether something is playing — and their limits.",
+    summary: "Signs on the Myriad screen that suggest whether something is playing, from the manual, and their limits.",
+    quickAnswer: {
+      text: "In the manual, the progress bar fills as an item plays and each player has VU meters that confirm audio is playing. Standby means log playout is not active. None of this proves listeners hear it.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlayers.id, SOURCES.myriadLogIcons.id],
+    },
     equipmentIds: ["myriad-playout", "audio-level-meters"],
     status: "draft",
     keywords: ["playing", "stopped", "paused", "status", "countdown", "progress", "frozen"],
@@ -587,11 +704,11 @@ export const articles: KnowledgeArticle[] = [
       "Do the level meters move?",
     ],
     openQuestions: ["What Myriad shows when playback has stopped, paused or failed."],
-    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadDashboard, SOURCES.myriadPlaying, SOURCES.developmentTeam, SOURCES.myriadSupport],
+    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadDashboard, SOURCES.myriadPlaying, SOURCES.myriadPlayers, SOURCES.myriadLogIcons, SOURCES.developmentTeam, SOURCES.myriadSupport],
     relatedArticleIds: ["kb-myriad-now-playing", "kb-audio-output", "ts-next-song-wont-play"],
     relatedTopicIds: ["topic-next-song"],
     glossaryTermIds: ["ppm"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on progress, meters and Standby.")],
     sections: [
       {
         heading: "Signs to look at",
@@ -601,7 +718,17 @@ export const articles: KnowledgeArticle[] = [
           "A countdown that keeps going down, and a moving progress bar, suggest an item is playing. Level meters that move suggest audio is present. None of these on its own proves listeners can hear it.",
         ],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says shows playback",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadDashboard.id, SOURCES.myriadPlayers.id, SOURCES.myriadLogIcons.id],
+        body: [
+          "A progress bar fills as an item plays, with the time remaining beside it, and the countdown becomes more prominent near the end.",
+          "Each player has VU meters, which the manual describes as visual confirmation that audio is playing. When an item finishes it is ejected from the player automatically.",
+          "In Standby mode, log playout is not active and Myriad is not playing from the log.",
+          "The manual does not say what Myriad shows when playback stalls, pauses unexpectedly or fails.",
+        ],
+      },
     ],
   },
   {
@@ -611,18 +738,23 @@ export const articles: KnowledgeArticle[] = [
     category: "playout",
     kind: "informational",
     software: MYRIAD_6,
-    summary: "The player areas and toolbar visible on the Myriad screen. How to operate them is not yet documented here.",
+    summary: "What the manual says the Myriad players show and do. Whether presenters here should use them is not documented.",
+    quickAnswer: {
+      text: "Each Myriad player shows the item's title and artist, timers, play/pause, re-cue and eject controls, intro and extro countdowns, VU meters and a volume control. Finished items are ejected automatically.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.myriadPlayers.id],
+    },
     equipmentIds: ["myriad-playout"],
     status: "draft",
     keywords: ["player", "players", "player 1", "controls", "play", "cue", "toolbar", "media item"],
     symptoms: ["What are Player 1 to 4?", "Which button plays a song?"],
     diagnosticQuestions: ["Which player area shows the item you're asking about?"],
     openQuestions: ["Whether presenters at this station should use the on-screen player controls at all, and how."],
-    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadPlaying, SOURCES.developmentTeam, SOURCES.myriadSupport],
+    sources: [SOURCES.photoMyriadScreen, SOURCES.myriadPlaying, SOURCES.myriadPlayers, SOURCES.developmentTeam, SOURCES.myriadSupport],
     relatedArticleIds: ["kb-myriad-screen", "kb-myriad-now-playing"],
     relatedTopicIds: [],
     glossaryTermIds: ["player"],
-    revisions: [RT003_NEW],
+    revisions: [RT003_NEW, fromManual("Added a short answer and a section summarising the Myriad 6 manual on players.")],
     sections: [
       {
         heading: "What the photograph shows",
@@ -637,10 +769,20 @@ export const articles: KnowledgeArticle[] = [
         status: "draft",
         sourceIds: [SOURCES.developmentTeam.id],
         body: [
-          "No station-approved instructions exist for these controls yet. Manufacturer documentation, once summarised, will explain what they do in general — it will not on its own mean presenters should use them.",
+          "No station-approved instructions exist for these controls yet. The manual explains what they do in general; that does not on its own mean presenters should use them.",
         ],
       },
-      OFFICIAL_PENDING,
+      {
+        heading: "What the manual says a player shows",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.myriadPlayers.id, SOURCES.myriadPlaying.id],
+        body: [
+          "A player shows the item's title and artist, count-up and countdown timers, the end-type letter and the media ID. It has play/pause, re-cue and eject controls, VU meters and a volume control.",
+          "A square icon beside the countdown shows the intro time left. A circle icon counts down to the extro, the point where Myriad moves on automatically.",
+          "When an item finishes it is ejected automatically, leaving the player ready for the next one.",
+          "The manual lists several ways to play an item: dragging it to a player, right-click Play or Cue, the Play tab on the ribbon, favourites and hotkeys. Preview lets someone listen without sending the item to air. The manual advises against double-clicking an item on air without cueing it first.",
+        ],
+      },
     ],
   },
   {
@@ -683,6 +825,240 @@ export const articles: KnowledgeArticle[] = [
         status: "draft",
         sourceIds: [SOURCES.photoConsole.id],
         body: ["The console has channels labelled Myriad A 1 to A 4, meter displays labelled PROGRAM 1 and MONITOR, and a label asking presenters to leave all Myriad faders up at the end of the show."],
+      },
+    ],
+  },
+  /* ---------------------------------------------------------------- */
+  /* Studio hardware explained from the makers' documentation          */
+  /* (Task 6). Models are read from photographs and NOT confirmed by   */
+  /* the station; the documentation describes the product in general,  */
+  /* not how this studio is set up.                                    */
+  /* ---------------------------------------------------------------- */
+  {
+    id: "kb-axia-iq-console",
+    title: "The Axia iQ console",
+    type: "equipment-guide",
+    category: "mixing",
+    kind: "informational",
+    summary: "What Axia says the iQ console is and what its displays and controls are for. The model name comes from a label in the station's photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Axia describes iQ as a radio mixing console with 8 to 24 faders, and says the mixing is done in a separate engine unit. The photo shows an iQ label; the model is not confirmed by the station.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.axiaIq.id],
+    },
+    equipmentIds: ["mixing-console"],
+    status: "draft",
+    keywords: ["axia", "iq", "console", "mixing desk", "fader", "options knob", "soft key", "preview", "cue", "meters", "talkback", "studiocore"],
+    symptoms: ["What is this console?", "What is the display under each fader?", "What does the Options knob do?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Whether the station's console is an Axia iQ (the label is seen in a photograph only) and which frames and options it has.",
+      "Which source is assigned to each fader at this station.",
+      "Which controls presenters are expected to use, and which should be left alone.",
+    ],
+    sources: [SOURCES.photoConsole, SOURCES.axiaIq, SOURCES.axiaIqManual, SOURCES.axiaIqQuickStart, SOURCES.developmentTeam],
+    relatedArticleIds: ["guide-studio-overview"],
+    relatedTopicIds: [],
+    glossaryTermIds: ["fader"],
+    revisions: [fromDocs("Axia iQ", "Created from the Axia iQ product page.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoConsole.id],
+        body: ["The photograph shows a console with an Axia iQ label. This is an observation from a photograph: the station has not confirmed the model."],
+      },
+      {
+        heading: "What Axia says the iQ is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaIq.id],
+        body: [
+          "Axia presents iQ as a radio console system that can be built with 8 to 24 faders: a main frame with eight faders, plus optional expansion frames.",
+          "The desk is the control surface. Axia says the mixing and processing happen in a separate engine unit, called StudioCore, linked to the desk by a single cable, and that no audio passes directly through the desk itself.",
+          "This describes the product in general. It does not say how this studio's console is set up.",
+        ],
+      },
+      {
+        heading: "What the controls and displays are for, according to Axia",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaIq.id],
+        body: [
+          "A small display under each fader shows the source currently on that fader. Pressing the Options knob brings up extra choices for that fader on its display, such as gain trim, voice EQ and pan.",
+          "Each fader has a Soft key whose job depends on the source: Axia lists talkback and starting events as examples. Each fader also has a Preview (cue) function for listening to a source before it is taken to air.",
+          "Channel-input confidence meters are described as showing whether audio is present on a source before it goes to air. Separate program meters can be shown in VU or PPM style.",
+          "There are monitor sections for the studio and for the control room, and a talkback system for speaking to studio guests.",
+          "The page does not describe what any fault looks like on these displays.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "kb-axia-qor16",
+    title: "The Axia QOR.16 console engine",
+    type: "equipment-guide",
+    category: "technical",
+    kind: "informational",
+    summary: "What Axia says the QOR.16 is, from its product page. The model name comes from a label in the station's rack photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Axia describes the QOR.16 as a console engine combining mixing, power supply and network switch, and says its front-panel LED display shows power and network status. The photo shows this label; the model is not confirmed by the station.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.axiaQor16.id],
+    },
+    equipmentIds: ["equipment-rack"],
+    status: "draft",
+    keywords: ["axia", "qor.16", "qor16", "console engine", "rack", "engine", "livewire", "network switch", "power supply"],
+    symptoms: ["What is the Axia unit in the rack?", "What does the QOR.16 do?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Whether this QOR.16 serves the console in the photograph. Axia's QOR.16 page lists it for Radius, DESQ and RAQ consoles, mentions iQ in its FAQ (a cable length question and a telephone hybrid question) and links the iQ manual, while the iQ page names StudioCore as iQ's engine. Which engine this studio's iQ uses is not confirmed.",
+      "What the front-panel display normally shows at this station.",
+      "What the unit does in this studio and whether presenters should ever touch it.",
+    ],
+    sources: [SOURCES.photoEquipmentRack, SOURCES.axiaQor16, SOURCES.developmentTeam],
+    relatedArticleIds: ["kb-telos-xnode2"],
+    relatedTopicIds: [],
+    glossaryTermIds: [],
+    revisions: [fromDocs("Axia QOR.16", "Created from the Axia QOR.16 product page.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoEquipmentRack.id],
+        body: ["A unit in the equipment rack photograph is labelled Axia QOR.16 Integrated Console Engine. This is an observation from a photograph: the station has not confirmed the model or what it is connected to."],
+      },
+      {
+        heading: "What Axia says the QOR.16 is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaQor16.id],
+        body: [
+          "Axia calls it an integrated console engine: a single unit that combines the mixing engine, audio inputs and outputs, the console's power supply and a network switch. It is listed for use with Radius, DESQ and RAQ mixing consoles.",
+          "Connections Axia lists include two microphone inputs, analog inputs and outputs, one AES/EBU input and output, four control-logic (GPIO) ports and several network ports, some of which can supply power to network devices.",
+          "It is cooled without a fan, so it is silent in the studio.",
+          "This describes the product in general. It does not say how this station uses it.",
+        ],
+      },
+      {
+        heading: "What the indicator is for, according to Axia",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.axiaQor16.id],
+        body: ["Axia says a front-panel LED display monitors power and network status. The page does not say what the display looks like in any particular state."],
+      },
+    ],
+  },
+  {
+    id: "kb-telos-xnode2",
+    title: "The Telos xNode2 audio interface",
+    type: "equipment-guide",
+    category: "technical",
+    kind: "informational",
+    summary: "What Telos Alliance says an xNode2 is, with its front-panel screen and lights, from the xNode2 manual. The model name comes from a label in the station's rack photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Telos describes xNode2 as a half-rack box converting audio between ordinary connections and network audio, and says its front screen shows setup and status. The photo shows an X-NODE 2 label; the model is not confirmed by the station.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.xnode2Intro.id, SOURCES.xnode2InDepth.id],
+    },
+    equipmentIds: ["equipment-rack"],
+    status: "draft",
+    keywords: ["xnode", "x-node", "xnode2", "x-node 2", "telos", "node", "audio over ip", "aoip", "rack", "lcd", "power lights"],
+    symptoms: ["What is the X-NODE 2 in the rack?", "What are the lights on the X-NODE 2?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Which xNode2 model the station has: the label in the photograph does not say, and the manual describes five (analog, AES3, microphone, GPIO and mixed signal).",
+      "What the front-panel screen normally shows at this station.",
+      "What this unit connects to in this studio, and whether presenters should ever touch it.",
+    ],
+    sources: [SOURCES.photoEquipmentRack, SOURCES.xnode2Intro, SOURCES.xnode2InDepth, SOURCES.developmentTeam],
+    relatedArticleIds: ["kb-axia-qor16"],
+    relatedTopicIds: [],
+    glossaryTermIds: [],
+    revisions: [fromDocs("Telos xNode2", "Created from the xNode2 manual chapters on the family and the front panel.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoEquipmentRack.id],
+        body: ["A unit in the equipment rack photograph is labelled X-NODE 2, with The Telos Alliance name. This is an observation from a photograph: the station has not confirmed the model, and the label does not show which xNode2 variant it is."],
+      },
+      {
+        heading: "What Telos says an xNode2 is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.xnode2Intro.id],
+        body: [
+          "The manual describes the xNode2 as a family of half-rack units that convert between line-level audio, AES3 digital audio, microphone inputs or control signals (GPIO) and audio over a network (AoIP).",
+          "There are five models: analog, AES3, microphone, GPIO and mixed signal. They differ in their connections at the back.",
+          "All models have a mains connection and two network ports at the back, and the manual says the top network port can also power the unit (PoE+).",
+          "This describes the product in general. It does not say how this station uses it.",
+        ],
+      },
+      {
+        heading: "What the front panel is for, according to the manual",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.xnode2Intro.id, SOURCES.xnode2InDepth.id],
+        body: [
+          "The front has a colour screen showing setup and status information, and two buttons next to it. The top button normally pages between views; the bottom is a soft key whose job is shown on the screen.",
+          "Two lights show whether power is available from the network cable (PoE+) or from the mains; each is lit when that source is present, and the labels are on the lenses.",
+          "The manual says the screen dims after a period without use and brightens when a button is pressed.",
+          "The manual does not say what the screen shows when something is wrong.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "kb-behringer-ms16",
+    title: "The Behringer MS16 speakers",
+    type: "equipment-guide",
+    category: "monitoring",
+    kind: "informational",
+    summary: "What Behringer says the MS16 is and what its controls and sockets are for, from its product page. The model name comes from a label in the station's photograph and has not been confirmed.",
+    quickAnswer: {
+      text: "Behringer describes the MS16 as a small personal monitor pair of powered stereo speakers with Volume, Bass and Treble controls. The photo shows MS16 labels; the model is not confirmed by the station.",
+      status: "manufacturer-documented",
+      sourceIds: [SOURCES.behringerMs16.id],
+    },
+    equipmentIds: ["studio-monitor-speakers"],
+    status: "draft",
+    keywords: ["behringer", "ms16", "monitor speaker", "speakers", "volume", "bass", "treble", "phones", "headphone socket"],
+    symptoms: ["What are these speakers?", "What do the knobs on the speakers do?"],
+    diagnosticQuestions: [],
+    openQuestions: [
+      "Whether the station's speakers are the Behringer MS16 (the label is seen in a photograph only) and how many there are.",
+      "Whether the studio uses the speakers' own sockets at all, and which control sets the speaker volume at this station.",
+      "Whether the speakers mute automatically when a microphone is live. Behringer's page describes no such feature.",
+      "Behringer's page describes a small personal monitor pair \u201cideally suited for home studios\u201d, but the station's photograph shows wall-mounted speakers. Whether these are the same product is not confirmed.",
+    ],
+    sources: [SOURCES.photoMonitorSpeaker, SOURCES.behringerMs16, SOURCES.behringerMs16QuickStart, SOURCES.behringerMs16Manual, SOURCES.developmentTeam],
+    relatedArticleIds: ["ts-cant-hear-anything"],
+    relatedTopicIds: [],
+    glossaryTermIds: [],
+    revisions: [fromDocs("Behringer MS16", "Created from the Behringer MS16 product page.")],
+    sections: [
+      {
+        heading: "What the station's photograph shows",
+        status: "draft",
+        sourceIds: [SOURCES.photoMonitorSpeaker.id],
+        body: ["The photograph shows a wall-mounted speaker labelled MS16 Monitor Speaker with a Behringer logo. This is an observation from a photograph: the station has not confirmed the model."],
+      },
+      {
+        heading: "What Behringer says the MS16 is",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.behringerMs16.id],
+        body: [
+          "Behringer describes the MS16 as an active (powered) 16-watt personal monitor system: two speakers with 4-inch woofers, each driven by an 8-watt amplifier.",
+          "Behringer presents it as a compact personal monitor pair \u201cideally suited for home studios\u201d, keyboard and vocal monitoring and similar uses. The page does not mention wall mounting, whereas the station's photograph shows wall-mounted speakers.",
+          "It is magnetically shielded, and a speaker cable linking the two speakers is included.",
+          "This describes the product in general. It does not say how this station's speakers are set up.",
+        ],
+      },
+      {
+        heading: "What the controls and sockets are for, according to Behringer",
+        status: "manufacturer-documented",
+        sourceIds: [SOURCES.behringerMs16.id],
+        body: [
+          "The page lists Volume, Bass and Treble controls.",
+          "All audio inputs are on the right-hand speaker: a stereo input for sources such as CD players, an RCA stereo input, and a microphone input with its own MIC LEVEL control.",
+          "The PHONES socket takes headphones; Behringer says the speakers switch off automatically while headphones are connected to it.",
+          "The page does not describe any indicator light.",
+        ],
       },
     ],
   },

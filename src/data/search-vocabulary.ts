@@ -36,6 +36,10 @@ export const searchConcepts: SearchConcept[] = [
   { id: "stop", phrases: ["stop chain", "stopped by itself", "it stopped", "stops after", "stopped after", "stop marker"] },
   { id: "go", phrases: ["go button", "go function", "press go", "hit go"] },
   { id: "now-playing", phrases: ["what is playing", "now playing", "currently playing", "playing right now", "what is on air", "what song is this"] },
+  { id: "how-to", phrases: ["how do i", "how can i", "how to", "how would i", "how should i", "how does one"] },
+  { id: "play-next", phrases: ["play the next", "play next", "start the next", "get to the next"] },
+  { id: "log", phrases: ["the log", "in the log", "log item", "log items", "playlist"] },
+  { id: "program-label", phrases: ["program 1", "program one", "programme 1", "programme one"] },
   { id: "cable", phrases: ["cable", "wire", "lead", "plug", "plugged", "unplugged", "disconnected"] },
 ];
 
@@ -146,9 +150,26 @@ export const searchIntents: SearchIntent[] = [
     articleIds: ["guide-studio-overview", "kb-myriad-screen"],
   },
   {
+    id: "play-next-song",
+    label: "How to play the next song",
+    match: [["how-to", "next-song"], ["play-next"]],
+    exclude: ["not-playing", "unresponsive", "stuck", "no-audio"],
+    equipmentIds: ["myriad-playout", "green-next-button"],
+    focusEquipmentId: "myriad-playout",
+    articleIds: ["kb-myriad-next-item", "kb-myriad-go-and-button", "guide-green-button"],
+  },
+  {
+    id: "program-monitor-labels",
+    label: "The meters labelled PROGRAM 1 and MONITOR",
+    match: [["program-label"]],
+    equipmentIds: ["audio-level-meters", "mixing-console"],
+    focusEquipmentId: "audio-level-meters",
+    articleIds: ["kb-audio-output"],
+  },
+  {
     id: "indicator-meaning",
     label: "What a colour or symbol on the Myriad screen means",
-    match: [["indicator"], ["indicator", "meaning"]],
+    match: [["indicator"], ["indicator", "meaning"], ["log", "meaning"]],
     equipmentIds: ["myriad-playout"],
     articleIds: ["kb-myriad-screen", "kb-myriad-playback-status"],
   },

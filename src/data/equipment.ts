@@ -99,7 +99,7 @@ export const equipment: EquipmentRecord[] = [
       "Whether any controls should never be changed by presenters",
     ],
     aliases: ["mixing console", "mixer", "mixing desk", "desk", "console", "faders", "fader", "sliders", "slider", "board"],
-    relatedArticleIds: ["guide-studio-overview", "ts-cant-hear-anything"],
+    relatedArticleIds: ["guide-studio-overview", "ts-cant-hear-anything", "kb-axia-iq-console"],
     flowEntryNodeId: "generic-symptom",
   },
   {
@@ -200,7 +200,7 @@ export const equipment: EquipmentRecord[] = [
       "Whether presenters can also advance to the next song from the Myriad screen",
     ],
     aliases: ["myriad", "playout", "playout software", "playlist", "next song", "next track", "song", "songs", "track", "music"],
-    relatedArticleIds: ["ts-next-song-wont-play", "guide-green-button"],
+    relatedArticleIds: ["ts-next-song-wont-play", "guide-green-button", "kb-myriad-next-item", "kb-myriad-live-assist", "kb-myriad-screen", "kb-myriad-stop-chains"],
     flowEntryNodeId: "my-start",
   },
   {
@@ -236,7 +236,7 @@ export const equipment: EquipmentRecord[] = [
       "Whether the small hole above the button is an indicator light, and what it shows",
     ],
     aliases: ["green button", "green thing", "green", "next button", "big button", "button", "next song", "next track"],
-    relatedArticleIds: ["guide-green-button", "ts-next-song-wont-play"],
+    relatedArticleIds: ["guide-green-button", "ts-next-song-wont-play", "kb-myriad-next-item"],
     flowEntryNodeId: "gb-screen",
   },
   {
@@ -315,7 +315,7 @@ export const equipment: EquipmentRecord[] = [
       "Which control sets the speaker volume",
     ],
     aliases: ["studio monitor speakers", "monitor speakers", "studio speakers", "speakers", "speaker", "loudspeakers", "monitors", "monitor"],
-    relatedArticleIds: ["ts-cant-hear-anything"],
+    relatedArticleIds: ["ts-cant-hear-anything", "kb-behringer-ms16"],
     flowEntryNodeId: "hear-speakers",
   },
   {
@@ -371,7 +371,7 @@ export const equipment: EquipmentRecord[] = [
       "What normal indicator lights look like",
     ],
     aliases: ["technical equipment rack", "equipment rack", "rack", "cabinet", "tech rack"],
-    relatedArticleIds: ["help-cables"],
+    relatedArticleIds: ["help-cables", "kb-axia-qor16", "kb-telos-xnode2"],
     flowEntryNodeId: "generic-symptom",
   },
   {

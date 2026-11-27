@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { VerificationBadge } from "@/components/ui/VerificationBadge";
 import { getCategory, getEquipmentById } from "@/lib/content/equipment";
+import { SourceLabel } from "@/components/knowledge/SourceLabel";
+import { manualLabel } from "@/lib/knowledge/manual-label";
 import { getArticleById } from "@/lib/knowledge/search";
 import type { Hotspot } from "@/types";
 
@@ -20,6 +22,9 @@ export interface EquipmentPanelProps {
   /** The hotspot for this equipment in the photo on screen, if any. */
   photoHotspot?: Hotspot | null;
 }
+
+/** The panel is a quick glance; the Knowledge Centre holds the rest. */
+const MAX_MANUAL_ANSWERS = 3;
 
 export function EquipmentPanel({
   equipmentId,
@@ -64,6 +69,18 @@ export function EquipmentPanel({
     const article = getArticleById(id);
     return article ? [article] : [];
   });
+  // Only the record's own links; manual-backed quick answers only, at most MAX_MANUAL_ANSWERS.
+  const allManual = articles.flatMap((article) => {
+    const source = article.quickAnswer?.sourceIds
+      .flatMap((id) => article.sources.filter((s) => s.id === id))
+      .find((s) => manualLabel(s) !== null);
+    return article.quickAnswer && source ? [{ article, source }] : [];
+  });
+  const manualArticles = allManual.slice(0, MAX_MANUAL_ANSWERS);
+  const hasMoreManual = allManual.length > MAX_MANUAL_ANSWERS;
+  // An article already shown with its quick answer is not repeated under "Related guides".
+  const shownIds = new Set(manualArticles.map(({ article }) => article.id));
+  const relatedGuides = articles.filter((article) => !shownIds.has(article.id));
 
   return (
     <section aria-labelledby="equipment-panel-title" className="animate-fade-up flex flex-col" key={record.id}>
@@ -135,10 +152,33 @@ export function EquipmentPanel({
           </ul>
         </PanelSection>
 
-        {articles.length > 0 && (
+        {manualArticles.length > 0 && (
+          <PanelSection icon={<BookOpen aria-hidden className="size-4" />} title="From the maker's documentation">
+            <ul className="flex flex-col gap-3">
+              {manualArticles.map(({ article, source }) => (
+                <li key={article.id} className="flex flex-col gap-1.5">
+                  <Link href={`/knowledge/${article.id}`} className="-mx-2 block rounded-md px-2 py-1.5 text-[15px] font-medium text-signal-300 underline-offset-2 hover:underline">
+                    {article.title}
+                  </Link>
+                  <p className="text-[15px] leading-relaxed text-ink-200">{article.quickAnswer?.text}</p>
+                  <div>
+                    <SourceLabel source={source} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {hasMoreManual && (
+              <Link href="/knowledge" className="mt-2 -mx-2 inline-flex min-h-11 items-center rounded-md px-2 text-[15px] font-medium text-signal-300 underline underline-offset-2">
+                More in the Knowledge Centre
+              </Link>
+            )}
+          </PanelSection>
+        )}
+
+        {relatedGuides.length > 0 && (
           <PanelSection icon={<BookOpen aria-hidden className="size-4" />} title="Related guides">
             <ul className="flex flex-col gap-1">
-              {articles.map((article) => (
+              {relatedGuides.map((article) => (
                 <li key={article.id}>
                   <Link
                     href={`/knowledge/${article.id}`}

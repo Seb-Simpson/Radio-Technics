@@ -22,5 +22,28 @@ Radio Technics labels everything with how far it can be trusted. Only the statio
 3. For a procedure, set `kind: "approved-procedure"` only after every section is verified.
 4. Run `npm run check`. There is no in-app editing yet (RT-005).
 
-## Official Myriad documentation
-Three Broadcast Radio help pages are listed as sources (Myriad Playout 6 support, Dashboard, currently-playing). They have **not yet been read**: the development environment's network policy blocked `www.broadcastradio.com` and `help.broadcastradio.com`. Myriad articles are therefore drafts with open questions. Once the hosts are allowed, read the pages, write original summaries, set `retrievedOn`, and mark summarised sections `manufacturer-documented`.
+## Manufacturer documentation read (2026-11-26)
+Everything below was read on 2026-11-26 and summarised in our own words. None of it describes a fix, a restart or a recovery step, and none of it says how this station has set anything up. Each page is listed in `src/data/sources.ts` and `EQUIPMENT.md` ("Documentation read").
+
+| Product | What was read | Kind |
+| --- | --- | --- |
+| Myriad 6 | Playout support landing page; Dashboard; Playing Media Items; Log Icons; Media Item Types and Display; Using Media Players; Media Item Types, Endings and Sweepers | Help pages (manual) |
+| Axia iQ | iQ Broadcast Console page | Product page (not the manual) |
+| Axia QOR.16 | QOR.16 Integrated Console Engine page | Product page (not the manual) |
+| Telos xNode2 | "Introducing the xNode2" and "In-Depth" chapters | Manual chapters |
+| Behringer MS16 | MS16 page | Product page (not the manual) |
+
+Short answers on these articles are labelled "From the ... manual" (or "product page") with a link to the original. Troubleshooter outcomes now point to the same short answers ("What the manual says"). This is information only: the outcome still tells the presenter to contact technical support, and the links are never shown on the urgent outcome or while a broadcast interruption is open.
+
+## What still needs the station engineer
+- **Green button or Go:** the manual describes Myriad's own Go control. Is the green button the same thing, or something else wired to Myriad? Until answered, Radio Technics does not say they are the same.
+- **Stop chains:** are stop chains in use in this studio's logs, and how should a presenter tell a deliberate stop from a fault?
+- **MS16:** the product page describes a small powered stereo speaker pair. The photograph label and the wall mounting do not obviously match it. Confirm the model, how many there are, and what is connected.
+- **QOR.16 and the iQ console:** Axia's QOR.16 page lists it for Radius, DESQ and RAQ consoles but also mentions iQ in its FAQ and links the iQ manual, while the iQ page names StudioCore as iQ's engine. Does this studio's iQ use a QOR.16, and is the QOR.16 in the rack the one serving the console labelled iQ?
+- **xNode2 variant:** the rack label says only X-NODE 2. The manual covers five models (analog, AES3, microphone, GPIO, mixed signal). Which one is it?
+- **Normal and fault indicators:** what the Myriad dashboard, the QOR.16 display, the xNode2 screen and the iQ displays look like normally, and when something is wrong.
+- **Unread PDFs:** the Axia iQ User Manual and Quick Start Guide, the rest of the xNode2 manual, and the Behringer MS16 Quick Start Guide and User Manual were not read (the MS16 ones are on a site we could not reach; the iQ ones are on a file host Radio Technics could not read; the QOR.16 page links no manual of its own). Please supply them or confirm they can be read.
+- Nothing above has been engineer-verified. Short answers are manufacturer-documented at best; station-specific statements stay drafts or station-reported.
+
+## Myriad documentation (earlier note)
+Earlier, the Broadcast Radio help pages could not be reached and Myriad articles were drafts. They have now been read (see above); the articles remain drafts until the engineer confirms how this studio uses Myriad.

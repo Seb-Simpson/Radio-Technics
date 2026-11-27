@@ -4,11 +4,14 @@ import { ArrowRight, BookA, Crosshair, MessageSquare, Search, TriangleAlert, Wre
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useMemo, useState } from "react";
+import { QuickAnswer } from "@/components/knowledge/QuickAnswer";
+import { SourceLabel } from "@/components/knowledge/SourceLabel";
 import { buttonStyles } from "@/components/ui/button-styles";
 import { VerificationBadge } from "@/components/ui/VerificationBadge";
 import { articles as allArticles } from "@/data/articles";
 import { getCategories, getEquipmentById } from "@/lib/content/equipment";
 import { cn } from "@/lib/cn";
+import { manualLabel } from "@/lib/knowledge/manual-label";
 import { articleKindLabels, articleTypeLabels } from "@/lib/knowledge/labels";
 import { equipmentChoices, searchKnowledge, type SearchInterpretation } from "@/lib/knowledge/search-engine";
 import { useTroubleshooter } from "@/lib/troubleshooter/TroubleshooterProvider";
@@ -37,6 +40,13 @@ export function KnowledgeCentre() {
     () => searchKnowledge(deferredQuery, { selectedEquipmentId: workspace.selectedEquipmentId, ignoreSelection }),
     [deferredQuery, workspace.selectedEquipmentId, ignoreSelection],
   );
+
+  /** Only the top result shows its quick answer inline; it is never shown for a lower-ranked article.
+   * Urgency comes first: with an urgent or possible-silence query nothing is promoted inline, and the
+   * top article stays in the ordinary grid. */
+  const topResult = response.articles[0]?.article;
+  const urgentOrSilent = response.safety.urgent || response.safety.possibleSilence;
+  const topWithQuick = topResult?.quickAnswer && !urgentOrSilent ? topResult : undefined;
 
   return (
     <div className="flex flex-col gap-5">
@@ -165,8 +175,18 @@ export function KnowledgeCentre() {
               <h2 className="text-sm font-semibold text-ink-100">
                 {response.articles.length === 1 ? "1 article" : `${response.articles.length} articles`}
               </h2>
+              {topWithQuick && (
+                <div className="mt-2 flex flex-col gap-2">
+                  <h3 className="font-medium text-ink-50">
+                    <Link href={`/knowledge/${topWithQuick.id}`} className="underline underline-offset-2 hover:text-signal-300">
+                      {topWithQuick.title}
+                    </Link>
+                  </h3>
+                  <QuickAnswer article={topWithQuick} headingLevel={4} />
+                </div>
+              )}
               <ul className="mt-2 grid gap-3 md:grid-cols-2">
-                {response.articles.map(({ article, reasons }) => (
+                {response.articles.filter(({ article }) => article !== topWithQuick).map(({ article, reasons }) => (
                   <li key={article.id}>
                     <ArticleCard article={article} reason={reasons[0]} />
                   </li>
@@ -233,6 +253,17 @@ function InterpretationCard({
   );
 }
 
+function manualChip(article: KnowledgeArticle) {
+  const source = article.quickAnswer?.sourceIds
+    .flatMap((id) => article.sources.filter((s) => s.id === id))
+    .find((s) => manualLabel(s) !== null);
+  return source ? (
+    <div>
+      <SourceLabel source={source} />
+    </div>
+  ) : null;
+}
+
 function ArticleCard({ article, reason }: { article: KnowledgeArticle; reason?: string }) {
   return (
     <Link
@@ -249,7 +280,8 @@ function ArticleCard({ article, reason }: { article: KnowledgeArticle; reason?: 
         {article.title}
         <ArrowRight aria-hidden className="size-3.5 text-ink-500 transition-transform group-hover:translate-x-0.5 group-hover:text-signal-400" />
       </h3>
-      <p className="text-sm leading-relaxed text-ink-300">{article.summary}</p>
+      <p className="text-[15px] leading-relaxed text-ink-300">{article.quickAnswer?.text ?? article.summary}</p>
+      {manualChip(article)}
       {reason && <p className="mt-auto pt-1 text-[12px] text-ink-400">Why: {reason}</p>}
     </Link>
   );
